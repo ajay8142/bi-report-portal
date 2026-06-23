@@ -1,0 +1,304 @@
+import { useState, useEffect } from 'react';
+import api from '../../api/axiosInstance';
+import toast from 'react-hot-toast';
+
+// ── Parameter renderer ────────────────────────────────────────
+function ParamField({ param, value, onChange }) {
+  const { name, label, dataType, UIType, multiValuesAllowed, lovLabels, values: lovValues, defaultValue, dateFormatString } = param;
+  const isLov = (UIType === 'menu' || UIType === 'check' || UIType === 'radio') && lovLabels?.length > 0;
+
+  if (isLov && multiValuesAllowed) {
+    return (
+      <div style={f.field}>
+        <label style={f.label}>{label}</label>
+        <div style={f.checkGroup}>
+          {lovLabels.map((lbl, i) => {
+            const val = lovValues[i] || lbl;
+            const checked = Array.isArray(value) ? value.includes(val) : false;
+            return (
+              <label key={val} style={f.checkItem}>
+                <input type="checkbox" checked={checked}
+                  onChange={e => {
+                    const cur = Array.isArray(value) ? [...value] : [];
+                    onChange(name, e.target.checked ? [...cur, val] : cur.filter(v => v !== val));
+                  }} />
+                <span style={{ marginLeft: 6 }}>{lbl}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (isLov) {
+    return (
+      <div style={f.field}>
+        <label style={f.label}>{label}</label>
+        <select style={f.input} value={value || ''} onChange={e => onChange(name, e.target.value)}>
+          <option value="">-- Select --</option>
+          {lovLabels.map((lbl, i) => (
+            <option key={i} value={lovValues[i] || lbl}>{lbl}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (dataType === 'date') {
+    return (
+      <div style={f.field}>
+        <label style={f.label}>{label} {dateFormatString ? `(${dateFormatString})` : ''}</label>
+        <input style={f.input} type="date" value={value || ''} onChange={e => onChange(name, e.target.value)} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={f.field}>
+      <label style={f.label}>{label}</label>
+      <input style={f.input} type={dataType === 'integer' || dataType === 'float' ? 'number' : 'text'}
+        value={value || ''} placeholder={defaultValue || ''}
+        onChange={e => onChange(name, e.target.value)} />
+    </div>
+  );
+}
+
+const f = {
+  field:      { marginBottom: '16px' },
+  label:      { display:'block', marginBottom:'6px', fontSize:'13px', fontWeight:600, color:'#333' },
+  input:      { width:'100%', padding:'10px 12px', border:'1px solid #ddd', borderRadius:'8px', fontSize:'14px', boxSizing:'border-box' },
+  checkGroup: { display:'flex', flexWrap:'wrap', gap:'12px' },
+  checkItem:  { display:'flex', alignItems:'center', fontSize:'13px', cursor:'pointer' },
+};
+
+// ── Main Component ─────────────────────────────────────────────
+export default function GenerateReport() {
+  const [modules,      setModules]      = useState([]);
+  const [activeModule, setActiveModule] = useState(null);
+  const [reports,      setReports]      = useState([]);
+  const [activeReport, setActiveReport] = useState(null);
+  const [params,       setParams]       = useState([]);
+  const [paramValues,  setParamValues]  = useState({});
+  const [format,       setFormat]       = useState('pdf');
+  const [loading,      setLoading]      = useState(false);
+  const [running,      setRunning]      = useState(false);
+
+  const FORMATS = ['pdf','xlsx','html','csv','rtf','xml'];
+
+  useEffect(() => {
+    setLoading(true);
+    api.get('/client/modules')
+      .then(r => setModules(r.data.data))
+      .catch(() => toast.error('Failed to load modules'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadReports = async (mod) => {
+    setActiveModule(mod);
+    setActiveReport(null);
+    setParams([]);
+    setParamValues({});
+    setLoading(true);
+    try {
+      const res = await api.get('/client/modules/reports', { params: { path: mod.absolutePath } });
+      setReports(res.data.data);
+    } catch { toast.error('Failed to load reports'); }
+    finally  { setLoading(false); }
+  };
+
+  const loadParams = async (report) => {
+    setActiveReport(report);
+    setParams([]);
+    setParamValues({});
+    setLoading(true);
+    try {
+      const res = await api.get('/client/reports/parameters', { params: { reportPath: report.absolutePath } });
+      const ps  = res.data.data || [];
+      setParams(ps);
+      // Pre-fill defaults
+      const defaults = {};
+      ps.forEach(p => {
+        if (p.defaultValue) defaults[p.name] = p.multiValuesAllowed ? [p.defaultValue] : p.defaultValue;
+      });
+      setParamValues(defaults);
+    } catch { toast.error('Failed to load parameters'); }
+    finally  { setLoading(false); }
+  };
+
+  const handleParamChange = (name, val) => setParamValues(prev => ({ ...prev, [name]: val }));
+
+  const runReport = async (action) => {
+    setRunning(true);
+    try {
+      // Build params payload
+      const paramPayload = params.map(p => ({
+        name:               p.name,
+        dataType:           p.dataType,
+        UIType:             p.UIType,
+        multiValuesAllowed: p.multiValuesAllowed,
+        values: Array.isArray(paramValues[p.name])
+          ? paramValues[p.name]
+          : paramValues[p.name] ? [paramValues[p.name]] : [],
+      }));
+
+      const res = await api.post('/client/reports/run', {
+        reportPath: activeReport.absolutePath,
+        format,
+        params: paramPayload,
+        action,
+      }, { responseType: 'blob' });
+
+      const blob     = new Blob([res.data], { type: res.headers['content-type'] });
+      const url      = URL.createObjectURL(blob);
+      const filename = activeReport.displayName + '.' + format;
+
+      if (action === 'preview') {
+        window.open(url, '_blank');
+      } else {
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      toast.success(`Report ${action === 'preview' ? 'opened' : 'downloaded'} successfully`);
+    } catch { toast.error('Failed to run report. Check parameters and try again.'); }
+    finally  { setRunning(false); }
+  };
+
+  return (
+    <div style={s.page}>
+      <h2 style={s.heading}>Generate Report</h2>
+
+      {/* Breadcrumb */}
+      <div style={s.breadcrumb}>
+        <span style={activeModule ? s.link : s.cur} onClick={() => { setActiveModule(null); setActiveReport(null); setReports([]); setParams([]); }}>
+          📁 Modules
+        </span>
+        {activeModule && (
+          <>
+            <span style={s.sep}> › </span>
+            <span style={activeReport ? s.link : s.cur} onClick={() => { setActiveReport(null); setParams([]); }}>
+              📂 {activeModule.displayName}
+            </span>
+          </>
+        )}
+        {activeReport && (
+          <>
+            <span style={s.sep}> › </span>
+            <span style={s.cur}>📄 {activeReport.displayName}</span>
+          </>
+        )}
+      </div>
+
+      {loading && <p style={s.loading}>Loading…</p>}
+
+      {/* Modules */}
+      {!activeModule && !loading && (
+        <div style={s.grid}>
+          {modules.length === 0
+            ? <p style={s.empty}>No modules assigned to you.</p>
+            : modules.map(mod => (
+              <div key={mod.absolutePath} style={s.card} onClick={() => loadReports(mod)}>
+                <div style={s.cardIcon}>📂</div>
+                <div style={s.cardName}>{mod.displayName}</div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* Reports */}
+      {activeModule && !activeReport && !loading && (
+        <div style={s.grid}>
+          {reports.length === 0
+            ? <p style={s.empty}>No reports assigned in this module.</p>
+            : reports.map(r => (
+              <div key={r.absolutePath} style={s.card} onClick={() => loadParams(r)}>
+                <div style={s.cardIcon}>📄</div>
+                <div style={s.cardName}>{r.displayName}</div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* Report Runner */}
+      {activeReport && !loading && (
+        <div style={s.runner}>
+          {/* Parameters section */}
+          <div style={s.runnerTop}>
+            <h3 style={s.sectionTitle}>📋 Parameters</h3>
+            {params.length === 0
+              ? <p style={{ color:'#888', fontSize:'14px' }}>This report has no parameters.</p>
+              : (
+                <div style={s.paramGrid}>
+                  {params.map(p => (
+                    <ParamField key={p.name} param={p}
+                      value={paramValues[p.name]}
+                      onChange={handleParamChange} />
+                  ))}
+                </div>
+              )
+            }
+          </div>
+
+          {/* Output options */}
+          <div style={s.runnerBottom}>
+            <h3 style={s.sectionTitle}>⚙️ Output Options</h3>
+            <div style={s.outputRow}>
+              <div>
+                <label style={f.label}>Output Format</label>
+                <div style={s.formatGroup}>
+                  {FORMATS.map(fmt => (
+                    <button key={fmt}
+                      style={{ ...s.fmtBtn, ...(format === fmt ? s.fmtBtnActive : {}) }}
+                      onClick={() => setFormat(fmt)}>
+                      {fmt.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={s.runBtns}>
+                <button style={s.previewBtn} onClick={() => runReport('preview')} disabled={running}>
+                  {running ? 'Running…' : '👁 Preview'}
+                </button>
+                <button style={s.downloadBtn} onClick={() => runReport('download')} disabled={running}>
+                  {running ? 'Running…' : '⬇ Download'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const s = {
+  page:         { padding:'32px' },
+  heading:      { fontSize:'22px', fontWeight:700, color:'#1a1a2e', marginBottom:'12px' },
+  breadcrumb:   { marginBottom:'20px', fontSize:'14px', display:'flex', alignItems:'center', gap:'4px' },
+  link:         { cursor:'pointer', color:'#1976d2', fontWeight:600 },
+  cur:          { color:'#333', fontWeight:600 },
+  sep:          { color:'#bbb' },
+  loading:      { color:'#888' },
+  empty:        { color:'#aaa', fontSize:'14px' },
+  grid:         { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:'16px' },
+  card:         { background:'#fff', borderRadius:'10px', padding:'20px', boxShadow:'0 2px 10px rgba(0,0,0,0.08)', cursor:'pointer', textAlign:'center', border:'1px solid #eee' },
+  cardIcon:     { fontSize:'32px', marginBottom:'8px' },
+  cardName:     { fontWeight:700, fontSize:'13px', color:'#1a1a2e' },
+  runner:       { background:'#fff', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)', overflow:'hidden' },
+  runnerTop:    { padding:'24px', borderBottom:'1px solid #f0f0f0' },
+  runnerBottom: { padding:'24px' },
+  sectionTitle: { fontSize:'15px', fontWeight:700, color:'#1a1a2e', margin:'0 0 16px' },
+  paramGrid:    { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:'0 24px' },
+  outputRow:    { display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:'20px' },
+  formatGroup:  { display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'8px' },
+  fmtBtn:       { padding:'7px 14px', border:'1px solid #ddd', borderRadius:'6px', background:'#f5f5f5', cursor:'pointer', fontWeight:600, fontSize:'12px', color:'#555' },
+  fmtBtnActive: { background:'#1976d2', color:'#fff', border:'1px solid #1976d2' },
+  runBtns:      { display:'flex', gap:'12px' },
+  previewBtn:   { padding:'10px 24px', background:'#388e3c', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600, fontSize:'14px' },
+  downloadBtn:  { padding:'10px 24px', background:'#1976d2', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600, fontSize:'14px' },
+};

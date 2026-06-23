@@ -1,0 +1,56 @@
+/* =========================================
+   Global Reset
+   ========================================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* =========================================
+   Base Body Styles
+   ========================================= */
+body {
+  margin: 0;
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* A soft, light-gray background perfect for admin dashboards */
+  background-color: #f4f6f8; 
+  color: #333;
+}
+
+/* Ensure the app takes up the full screen height */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Remove default link styles to play nicely with React Router & MUI */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* =========================================
+   Modern Custom Scrollbar
+   ========================================= */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1; 
+  border-radius: 4px;
+}
+ 
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1; 
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8; 
+}
