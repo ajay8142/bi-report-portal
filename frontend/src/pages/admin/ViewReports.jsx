@@ -49,16 +49,33 @@ export default function ViewReports() {
 
       {loading && <p style={s.loading}>Loading…</p>}
 
-      {/* Modules grid */}
+      {/* Modules list */}
       {!activeModule && !loading && modules.length > 0 && (
-        <div style={s.grid}>
-          {modules.map((mod) => (
-            <div key={mod.absolutePath} style={s.card} onClick={() => loadReports(mod)}>
-              <div style={s.cardIcon}>📂</div>
-              <div style={s.cardName}>{mod.displayName}</div>
-              <div style={s.cardPath}>{mod.absolutePath}</div>
-            </div>
-          ))}
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={s.th}>#</th>
+                <th style={s.th}>Module Name</th>
+                <th style={s.th}>Path</th>
+              </tr>
+            </thead>
+            <tbody>
+              {modules.map((mod, i) => (
+                <tr
+                  key={mod.absolutePath}
+                  style={{ ...(i % 2 === 0 ? s.rowEven : s.rowOdd), cursor: 'pointer' }}
+                  onClick={() => loadReports(mod)}
+                  onMouseEnter={e => e.currentTarget.style.background = '#e3f2fd'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#f9fafb'}
+                >
+                  <td style={s.td}>{i + 1}</td>
+                  <td style={s.td}>📂 {mod.displayName}</td>
+                  <td style={{ ...s.td, color: '#888', fontSize: '12px' }}>{mod.absolutePath}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -81,8 +98,11 @@ export default function ViewReports() {
                   <td style={s.td}>{i + 1}</td>
                   <td style={s.td}>📄 {r.displayName}</td>
                   <td style={{ ...s.td, color:'#888', fontSize:'12px' }}>{r.absolutePath}</td>
+                  
                 </tr>
+              
               ))}
+            
             </tbody>
           </table>
         </div>

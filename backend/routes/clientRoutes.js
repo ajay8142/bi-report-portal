@@ -9,7 +9,8 @@ router.use(auth, roleGuard('CLIENT'));
 router.get('/profile',            ctrl.getProfile);
 router.get('/modules',            ctrl.getModules);
 router.get('/modules/reports',    ctrl.getReports);
-router.get('/reports/parameters', ctrl.getParameters);
-router.post('/reports/run',       ctrl.runReport);
+router.get('/reports/parameters',  ctrl.getParameters);
+router.post('/reports/parameters', ctrl.refreshParameters);
+router.post('/reports/run',        ctrl.runReport);
 
 module.exports = router;

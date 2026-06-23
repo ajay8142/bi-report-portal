@@ -10,7 +10,7 @@ exports.getDashboard = async (req, res) => {
   const clientResult = await db.execute(
     `SELECT COUNT(*) AS TOTAL_CLIENTS FROM USERS WHERE ROLE='CLIENT' AND IS_ACTIVE=1`
   );
-  const modules = await bip.getModules('/shared');
+  const modules = await bip.getModules('/Generic Reports');
   let totalReports = 0;
   for (const mod of modules) {
     const reps = await bip.getReportsByModule(mod.absolutePath);
@@ -27,15 +27,26 @@ exports.getDashboard = async (req, res) => {
 };
 
 exports.getModules = async (req, res) => {
-  const modules = await bip.getModules(req.query.path || '/shared');
+  const modules = await bip.getModules(req.query.path || '/Generic Reports');
   res.json({ success: true, data: modules });
 };
 
 exports.getReports = async (req, res) => {
-  const { path } = req.query;
-  if (!path) return res.status(400).json({ success: false, message: 'path is required' });
-  const reports = await bip.getReportsByModule(path);
-  res.json({ success: true, data: reports });
+  const { path } = req.query; 
+  
+  if (!path || path === 'undefined') {
+    return res.status(400).json({ success: false, message: 'Module path required' });
+  }
+  
+  try {
+    // Fetch mapped data directly from the service
+    const reports = await bip.getReportsByModule(path);
+    
+    res.json({ success: true, data: reports });
+  } catch (err) {
+    console.error("🚨 Error fetching reports:", err.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch reports' });
+  }
 };
 
 exports.getClients = async (req, res) => {

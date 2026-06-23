@@ -1,48 +1,24 @@
 // ============================================================
 //  bipSoapService.js
 //  Oracle BI Publisher SOAP Service Layer
-//  Built against:
-//    WSDL-1 (ReportService v2)  – runReport, getReportParameters,
-//                                  getReportDefinition
-//    WSDL-2 (CatalogService v2) – getFolderContents
-//
-//  Namespace : http://xmlns.oracle.com/oxp/service/v2
-//  Both endpoints use document/literal wrapped SOAP 1.1
 // ============================================================
 
 const axios = require('axios');
+const https = require('https');
 const { parseStringPromise } = require('xml2js');
 
-// -------------------------------------------------------
-//  ENV-DRIVEN CONFIG
-//  Set these in your .env file:
-//    BIP_BASE_URL      e.g. http://bipserver:9704/xmlpserver
-//    BIP_USERNAME      BIP admin / service account
-//    BIP_PASSWORD
-// -------------------------------------------------------
-const BIP_BASE_URL = process.env.BIP_BASE_URL || 'http://localhost:9704/xmlpserver';
-const BIP_USER     = process.env.BIP_USERNAME  || 'bipuser';
-const BIP_PASS     = process.env.BIP_PASSWORD  || 'bippass';
+const BIP_BASE_URL = process.env.BIP_BASE_URL ;
+const BIP_USER     = process.env.BIP_USERNAME ;
+const BIP_PASS     = process.env.BIP_PASSWORD ;
 
-// WSDL endpoint paths (BIP 11g / 12c)
-const REPORT_SERVICE_PATH  = '/services/v2/ReportService';   // WSDL-1
-const CATALOG_SERVICE_PATH = '/services/v2/CatalogService';  // WSDL-2
+const REPORT_SERVICE_PATH  = '/services/v2/ReportService';
+const CATALOG_SERVICE_PATH = '/services/v2/CatalogService';
 
 const REPORT_ENDPOINT  = `${BIP_BASE_URL}${REPORT_SERVICE_PATH}`;
 const CATALOG_ENDPOINT = `${BIP_BASE_URL}${CATALOG_SERVICE_PATH}`;
 
 const NS = 'http://xmlns.oracle.com/oxp/service/v2';
 
-// -------------------------------------------------------
-//  SHARED SOAP HELPER
-// -------------------------------------------------------
-
-/**
- * Build a SOAP 1.1 envelope string.
- * @param {string} operation  - WSDL operation name (used as wrapper element)
- * @param {string} bodyXml    - Inner XML content (already namespace-prefixed)
- * @returns {string}
- */
 function buildEnvelope(operation, bodyXml) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope
@@ -57,13 +33,8 @@ function buildEnvelope(operation, bodyXml) {
 </soapenv:Envelope>`;
 }
 
-/**
- * POST a SOAP envelope to the given endpoint and return the parsed response.
- * Throws a structured error on SOAP faults or HTTP errors.
- */
 async function postSoap(endpoint, operation, bodyXml) {
   const envelope = buildEnvelope(operation, bodyXml);
-
   try {
     const response = await axios.post(endpoint, envelope, {
       headers: {
@@ -72,39 +43,32 @@ async function postSoap(endpoint, operation, bodyXml) {
       },
       timeout: 60000,
     });
-
     const parsed = await parseStringPromise(response.data, {
       explicitArray: false,
       ignoreAttrs:   true,
-      tagNameProcessors: [
-        // Strip namespace prefixes so we can access fields plainly
-        (name) => name.replace(/^.*:/, ''),
-      ],
+      tagNameProcessors: [(name) => name.replace(/^.*:/, '')],
     });
-
-    // Surface SOAP Fault as a real Error
     const fault = parsed?.Envelope?.Body?.Fault;
     if (fault) {
       const msg = fault.faultstring || fault.faultcode || 'SOAP Fault';
       throw new Error(`BIP SOAP Fault [${operation}]: ${msg}`);
     }
-
     return parsed?.Envelope?.Body;
   } catch (err) {
     if (err.response) {
-      // HTTP-level error; try to parse fault from body
-      const bodyText = err.response.data || '';
-      throw new Error(
-        `BIP HTTP ${err.response.status} [${operation}]: ${bodyText.substring(0, 300)}`
-      );
+      const bodyText = typeof err.response.data === 'string'
+        ? err.response.data
+        : JSON.stringify(err.response.data);
+      // Extract the SOAP faultstring for a readable error; log full body for debugging
+      const faultMatch = bodyText.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
+      const faultMsg   = faultMatch ? faultMatch[1].trim() : bodyText.substring(0, 500);
+      console.error(`\n--- BIP SOAP ERROR [${operation}] HTTP ${err.response.status} ---\n${bodyText.substring(0, 3000)}\n---`);
+      throw new Error(`BIP [${operation}] ${faultMsg}`);
     }
     throw err;
   }
 }
 
-// -------------------------------------------------------
-//  HELPER – escape XML special chars in string values
-// -------------------------------------------------------
 function xmlEsc(str) {
   if (str == null) return '';
   return String(str)
@@ -117,236 +81,119 @@ function xmlEsc(str) {
 
 // ============================================================
 //  1.  getFolderContents  (WSDL-2 – CatalogService)
-//
-//  Used by:
-//    • Admin  → "View Reports" → list modules (top-level folders)
-//    • Client → "Generate Report" → list modules assigned to client
-//
-//  WSDL contract:
-//    <element name="getFolderContents">
-//      <sequence>
-//        <element name="folderAbsolutePath" type="xsd:string"/>
-//        <element name="userID"             type="xsd:string"/>
-//        <element name="password"           type="xsd:string"/>
-//      </sequence>
-//    </element>
-//
-//    Returns: CatalogContents → catalogContents → ArrayOfItemData
-//      ItemData fields used here: displayName, absolutePath, type
-//      type = "folder"  → module
-//      type = "report"  → individual report
 // ============================================================
 
-/**
- * Fetch the contents (sub-folders and reports) of a BIP catalog folder.
- *
- * @param {string} folderAbsolutePath  - e.g. "/shared" or "/shared/HR Module"
- * @returns {Promise<Array<{displayName, absolutePath, type}>>}
- */
 async function getFolderContents(folderAbsolutePath) {
   const bodyXml = `
     <v2:folderAbsolutePath>${xmlEsc(folderAbsolutePath)}</v2:folderAbsolutePath>
     <v2:userID>${xmlEsc(BIP_USER)}</v2:userID>
     <v2:password>${xmlEsc(BIP_PASS)}</v2:password>`;
-
   const body = await postSoap(CATALOG_ENDPOINT, 'getFolderContents', bodyXml);
-
-  // Navigate: getFolderContentsResponse → getFolderContentsReturn → catalogContents
   const raw = body?.getFolderContentsResponse?.getFolderContentsReturn?.catalogContents;
-
   if (!raw) return [];
-
-  // catalogContents is ArrayOfItemData; items may be object or array
-  const items = raw.item
-    ? Array.isArray(raw.item) ? raw.item : [raw.item]
-    : [];
-
+  const items = raw.item ? Array.isArray(raw.item) ? raw.item : [raw.item] : [];
   return items.map((item) => ({
     displayName:  item.displayName  || item.objectName || '',
     absolutePath: item.absolutePath || '',
-    type:         (item.type || '').toLowerCase(), // 'folder' | 'report' | 'datamodel'
+    type:         (item.type || '').toLowerCase(),
     description:  item.description  || '',
   }));
 }
 
-/**
- * Get only the top-level MODULES (folders) from the BIP shared root.
- * Used by Admin "View Reports" and Client "Generate Report" first screen.
- *
- * @param {string} rootPath - default "/Generic Reports"
- * @returns {Promise<Array<{displayName, absolutePath}>>}
- */
 async function getModules(rootPath = '/Generic Reports') {
  const folderContents = await getFolderContents(rootPath);
-  
   if (!folderContents) return [];
-
-  // Ensure it's always an array
   const itemsArray = Array.isArray(folderContents) ? folderContents : [folderContents];
-
-  // Filter ONLY for folders (these are your modules like CASA)
   return itemsArray.filter(item => {
     const typeStr = String(item.type || '').toLowerCase();
     return typeStr === 'folder'; 
   });
 }
 
-/**
- * Get all REPORTS inside a specific module (folder).
- * Used after a module is clicked, in both Admin and Client panels.
- *
- * @param {string} moduleAbsolutePath - absolute path of the module folder
- * @returns {Promise<Array<{displayName, absolutePath}>>}
- */
 async function getReportsByModule(moduleAbsolutePath) {
   const items = await getFolderContents(moduleAbsolutePath);
-  return items.filter((i) => i.type === 'report' || i.type === 'xdoreport');
+  return items;
 }
 
 // ============================================================
 //  2.  getReportParameters  (WSDL-1 – ReportService)
-//
-//  Used by:
-//    • Client → "Generate Report" → parameter form
-//
-//  WSDL contract:
-//    <element name="getReportParameters">
-//      <sequence>
-//        <element name="reportRequest" type="impl:ReportRequest"/>
-//        <element name="userID"        type="xsd:string"/>
-//        <element name="password"      type="xsd:string"/>
-//      </sequence>
-//    </element>
-//
-//    ReportRequest fields needed for param fetch:
-//      reportAbsolutePath, attributeFormat (set to "pdf" as dummy)
-//
-//    Returns: ParamNameValues → listOfParamNameValues → ArrayOfParamNameValue
-//
-//    ParamNameValue fields:
-//      name                string   – internal parameter name
-//      label               string   – display label
-//      dataType            string   – "string" | "integer" | "date" | "float"
-//      UIType              string   – "text" | "menu" | "date" | "check" | "radio"
-//      multiValuesAllowed  boolean  – true → multi-select
-//      values              ArrayOfString  – current / default value(s)
-//      lovLabels           ArrayOfString  – LOV display labels  (parallel array)
-//      defaultValue        string   – single default value
-//      dateFormatString    string   – e.g. "MM/dd/yyyy"
-//      refreshParamOnChange boolean – cascade trigger
-//      selectAll           boolean
-//      useNullForAll       boolean
 // ============================================================
 
-/**
- * Fetch parameter definitions for a BIP report.
- *
- * @param {string} reportAbsolutePath  - e.g. "/shared/HR Module/Headcount.xdo"
- * @returns {Promise<Array<ParamNameValue>>}
- *
- * Each returned object:
- * {
- *   name, label, dataType, UIType,
- *   multiValuesAllowed, defaultValue,
- *   values: string[],        ← current / default values
- *   lovLabels: string[],     ← LOV display labels (parallel to lovValues)
- *   lovValues: string[],     ← LOV return values  (use values[] from WSDL)
- *   dateFormatString,
- *   refreshParamOnChange, selectAll, useNullForAll
- * }
- */
-async function getReportParameters(reportAbsolutePath) {
-  // Minimal ReportRequest – just enough to retrieve parameters
-  const reportRequestXml = `
-    <v2:reportRequest>
-      <v2:reportAbsolutePath>${xmlEsc(reportAbsolutePath)}</v2:reportAbsolutePath>
-      <v2:attributeFormat>pdf</v2:attributeFormat>
-      <v2:byPassCache>true</v2:byPassCache>
-      <v2:flattenXML>false</v2:flattenXML>
-      <v2:sizeOfDataChunkDownload>-1</v2:sizeOfDataChunkDownload>
-    </v2:reportRequest>
-    <v2:userID>${xmlEsc(BIP_USER)}</v2:userID>
-    <v2:password>${xmlEsc(BIP_PASS)}</v2:password>`;
+// Pass currentParams to get refreshed LOV options for dependent parameters
+async function getReportParameters(reportAbsolutePath, currentParams = []) {
+  const paramXml = buildParamXml(currentParams);
+  const xmlPayload = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope
+    xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:v2="http://xmlns.oracle.com/oxp/service/v2">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <v2:getReportParameters>
+         <v2:reportRequest>
+            <v2:reportAbsolutePath>${xmlEsc(reportAbsolutePath)}</v2:reportAbsolutePath>
+            <v2:attributeFormat>pdf</v2:attributeFormat>
+            <v2:byPassCache>true</v2:byPassCache>
+            <v2:flattenXML>false</v2:flattenXML>
+            <v2:sizeOfDataChunkDownload>-1</v2:sizeOfDataChunkDownload>
+            ${paramXml}
+         </v2:reportRequest>
+         <v2:userID>${xmlEsc(BIP_USER)}</v2:userID>
+         <v2:password>${xmlEsc(BIP_PASS)}</v2:password>
+      </v2:getReportParameters>
+   </soapenv:Body>
+</soapenv:Envelope>`;
 
-  const body = await postSoap(REPORT_ENDPOINT, 'getReportParameters', reportRequestXml);
+  try {
+    const response = await axios.post(REPORT_ENDPOINT, xmlPayload, {
+      headers: {
+        'Content-Type': 'text/xml;charset=UTF-8',
+        'SOAPAction': '""'
+      },
+      timeout: 10000
+    });
 
-  const raw =
-    body?.getReportParametersResponse?.getReportParametersReturn?.listOfParamNameValues;
+    const parsed = await parseStringPromise(response.data, {
+      explicitArray: false,
+      ignoreAttrs: true,
+      tagNameProcessors: [(name) => name.replace(/^.*:/, '')]
+    });
 
-  if (!raw) return [];
+    const raw = parsed?.Envelope?.Body?.getReportParametersResponse?.getReportParametersReturn?.listOfParamNameValues;
+    if (!raw) return [];
 
-  const items = raw.item
-    ? Array.isArray(raw.item) ? raw.item : [raw.item]
-    : [];
+    const items = raw.item ? (Array.isArray(raw.item) ? raw.item : [raw.item]) : [];
 
-  return items.map((p) => {
-    // values[] and lovLabels[] are ArrayOfString → item[]
-    const parseStringArray = (arr) => {
-      if (!arr || !arr.item) return [];
-      return Array.isArray(arr.item) ? arr.item : [arr.item];
-    };
+    return items.map((p) => {
+      const parseStringArray = (arr) => {
+        if (!arr || !arr.item) return [];
+        return Array.isArray(arr.item) ? arr.item : [arr.item];
+      };
 
-    return {
-      name:                  p.name                  || '',
-      label:                 p.label                 || p.name || '',
-      dataType:              (p.dataType             || 'string').toLowerCase(),
-      UIType:                (p.UIType               || 'text').toLowerCase(),
-      multiValuesAllowed:    p.multiValuesAllowed === 'true' || p.multiValuesAllowed === true,
-      defaultValue:          p.defaultValue          || '',
-      dateFormatString:      p.dateFormatString      || 'MM/dd/yyyy',
-      refreshParamOnChange:  p.refreshParamOnChange  === 'true',
-      selectAll:             p.selectAll             === 'true',
-      useNullForAll:         p.useNullForAll         === 'true',
-      values:                parseStringArray(p.values),
-      lovLabels:             parseStringArray(p.lovLabels),
-      // BIP returns lov return-values inside p.values when UIType is menu/check/radio
-      // lovLabels is the display side; p.values is the value side for LOV params
-    };
-  });
+      return {
+        name:                  p.name                  || '',
+        label:                 p.label                 || p.name || '',
+        dataType:              (p.dataType             || 'string').toLowerCase(),
+        UIType:                (p.UIType               || 'text').toLowerCase(),
+        multiValuesAllowed:    p.multiValuesAllowed === 'true' || p.multiValuesAllowed === true,
+        defaultValue:          p.defaultValue          || '',
+        dateFormatString:      p.dateFormatString      || 'MM/dd/yyyy',
+        refreshParamOnChange:  p.refreshParamOnChange  === 'true',
+        selectAll:             p.selectAll             === 'true',
+        useNullForAll:         p.useNullForAll         === 'true',
+        values:                parseStringArray(p.values),
+        lovLabels:             parseStringArray(p.lovLabels),
+      };
+    });
+  } catch (err) {
+    console.error("🚨 Parameter Soap Error:", err.message);
+    throw new Error('Failed to fetch parameters');
+  }
 }
 
 // ============================================================
 //  3.  runReport  (WSDL-1 – ReportService)
-//
-//  Used by:
-//    • Client → "Generate Report" → Run Report button
-//
-//  WSDL contract:
-//    <element name="runReport">
-//      <sequence>
-//        <element name="reportRequest" type="impl:ReportRequest"/>
-//        <element name="userID"        type="xsd:string"/>
-//        <element name="password"      type="xsd:string"/>
-//      </sequence>
-//    </element>
-//
-//    ReportRequest key fields:
-//      reportAbsolutePath  string
-//      attributeFormat     string  – "pdf"|"xlsx"|"html"|"csv"|"rtf"|"xml"
-//      attributeTemplate   string  – template ID (optional, uses default if omitted)
-//      attributeLocale     string  – e.g. "en-US"
-//      attributeTimezone   string  – e.g. "Asia/Calcutta"
-//      byPassCache         boolean
-//      flattenXML          boolean
-//      sizeOfDataChunkDownload int  – -1 = return full doc in one shot
-//      parameterNameValues → ParamNameValues → listOfParamNameValues → ArrayOfParamNameValue
-//        each item:
-//          name            string
-//          values          ArrayOfString  (use item[] for multi-value)
-//          multiValuesAllowed boolean
-//          UIType          string
-//
-//    Returns: ReportResponse
-//      reportBytes        base64Binary  – the rendered document
-//      reportContentType  string        – MIME type
-//      reportFileID       string        – can be used for chunked download
-//      reportLocale       string
 // ============================================================
 
-/**
- * MIME type map for BIP output formats.
- * Keys match the attributeFormat values BIP accepts.
- */
 const FORMAT_MIME = {
   pdf:   'application/pdf',
   xlsx:  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -369,32 +216,88 @@ const FORMAT_EXT = {
   pptx: '.pptx',
 };
 
+// Converts an ISO date string (YYYY-MM-DD) to the format BIP expects,
+// using the Java-style dateFormatString from the parameter definition.
+function formatDateByPattern(isoDate, pattern) {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+  const [year, mon, day] = isoDate.split('-');
+  const mIdx = parseInt(mon, 10) - 1;
+  const ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const FULL = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+  return (pattern || 'MM/dd/yyyy').replace(/yyyy|yy|MMMM|MMM|MM|M|dd|d/g, (t) => {
+    if (t === 'yyyy') return year;
+    if (t === 'yy')   return year.slice(-2);
+    if (t === 'MMMM') return FULL[mIdx] || mon;
+    if (t === 'MMM')  return ABBR[mIdx] || mon;
+    if (t === 'MM')   return mon;
+    if (t === 'M')    return String(parseInt(mon, 10));
+    if (t === 'dd')   return day;
+    if (t === 'd')    return String(parseInt(day, 10));
+    return t;
+  });
+}
+
 /**
- * Build the parameterNameValues XML block from an array of param objects.
- *
- * @param {Array<{name, values: string[], multiValuesAllowed, UIType}>} params
- * @returns {string}  XML fragment
+ * Build the parameterNameValues XML block.
+ * Generates the exact XML structure verified via Postman.
  */
 function buildParamXml(params = []) {
   if (!params.length) return '';
 
   const items = params
     .map((p) => {
-      const valueItems = (p.values || [p.value]).filter(Boolean);
-      const valuesXml = valueItems
-        .map((v) => `<v2:item>${xmlEsc(v)}</v2:item>`)
-        .join('');
+      // The frontend ensures p.values is an array. Filter out any blank/null values.
+      const valueItems = (p.values || []).filter(v => v !== null && v !== undefined && v !== '');
+
+      const isTrueDate = p.dataType === 'date';
+      const isStringDate = !isTrueDate && p.UIType === 'date';
+
+      const valuesXml = valueItems.map((v) => {
+        let formattedValue = v;
+
+        if (isTrueDate && v) {
+          // For true 'date' types, BIP expects an ISO 8601 dateTime string.
+          // The input 'v' is YYYY-MM-DD from the date picker.
+          const parts = String(v).split('T')[0].split('-');
+          if (parts.length === 3) {
+            const [yyyy, mm, dd] = parts;
+            // Format to ISO 8601 DateTime with UTC timezone. This is more robust than a hardcoded offset.
+            formattedValue = `${yyyy}-${mm}-${dd}T00:00:00.000+00:00`;
+          }
+        } else if (isStringDate && v) {
+          // For string types that are dates, format them using the pattern from the report definition.
+          // The input 'v' is YYYY-MM-DD.
+          formattedValue = formatDateByPattern(v, p.dateFormatString);
+        }
+
+        return `<v2:item>${xmlEsc(formattedValue)}</v2:item>`;
+      }).join('');
+
+      // Build the parameter properties dynamically
+      let propsXml = `<v2:name>${xmlEsc(p.name)}</v2:name>`;
+
+      if (p.multiValuesAllowed) {
+        propsXml += `\n          <v2:multiValuesAllowed>true</v2:multiValuesAllowed>`;
+      }
+
+      // Pass the dataType as-is. Don't force 'date' for string-based dates.
+      // BIP only needs this for non-string types like 'date', 'integer', etc.
+      if (p.dataType && p.dataType !== 'string') {
+        propsXml += `\n          <v2:dataType>${xmlEsc(p.dataType)}</v2:dataType>`;
+      }
 
       return `
         <v2:item>
-          <v2:name>${xmlEsc(p.name)}</v2:name>
-          <v2:UIType>${xmlEsc(p.UIType || 'text')}</v2:UIType>
-          <v2:dataType>${xmlEsc(p.dataType || 'string')}</v2:dataType>
-          <v2:multiValuesAllowed>${p.multiValuesAllowed ? 'true' : 'false'}</v2:multiValuesAllowed>
-          <v2:values>${valuesXml}</v2:values>
+          ${propsXml}
+          <v2:values>
+            ${valuesXml}
+          </v2:values>
         </v2:item>`;
     })
     .join('');
+
+  if (!items) return '';
 
   return `
     <v2:parameterNameValues>
@@ -404,25 +307,6 @@ function buildParamXml(params = []) {
     </v2:parameterNameValues>`;
 }
 
-/**
- * Run a BIP report and return the binary output.
- *
- * @param {object} options
- * @param {string}  options.reportAbsolutePath  – e.g. "/shared/HR/Headcount.xdo"
- * @param {string}  options.format              – "pdf" | "xlsx" | "html" | "csv" | "rtf"
- * @param {Array}   options.params              – [{name, values[], dataType, UIType, multiValuesAllowed}]
- * @param {string}  [options.templateId]        – BIP template ID; omit for default
- * @param {string}  [options.locale]            – e.g. "en-US"  (default "en-US")
- * @param {string}  [options.timezone]          – e.g. "Asia/Calcutta"
- *
- * @returns {Promise<{
- *   buffer:       Buffer,   ← decoded report bytes
- *   contentType:  string,   ← MIME type from BIP
- *   fileId:       string,   ← BIP reportFileID (for chunked download)
- *   locale:       string,
- *   ext:          string,   ← file extension for Content-Disposition
- * }>}
- */
 async function runReport({
   reportAbsolutePath,
   format       = 'pdf',
@@ -433,9 +317,7 @@ async function runReport({
 }) {
   const normalizedFormat = format.toLowerCase();
   const paramXml         = buildParamXml(params);
-  const templateXml      = templateId
-    ? `<v2:attributeTemplate>${xmlEsc(templateId)}</v2:attributeTemplate>`
-    : '';
+  const templateXml      = templateId ? `<v2:attributeTemplate>${xmlEsc(templateId)}</v2:attributeTemplate>` : '';
 
   const reportRequestXml = `
     <v2:reportRequest>
@@ -453,17 +335,12 @@ async function runReport({
     <v2:password>${xmlEsc(BIP_PASS)}</v2:password>`;
 
   const body = await postSoap(REPORT_ENDPOINT, 'runReport', reportRequestXml);
-
   const result = body?.runReportResponse?.runReportReturn;
 
-  if (!result) {
-    throw new Error('BIP runReport: empty response – no runReportReturn in body');
-  }
-
+  if (!result) throw new Error('BIP runReport: empty response');
+  
   const base64Data = result.reportBytes;
-  if (!base64Data) {
-    throw new Error('BIP runReport: reportBytes is empty – check report path and parameters');
-  }
+  if (!base64Data) throw new Error('BIP runReport: reportBytes is empty');
 
   const buffer      = Buffer.from(base64Data, 'base64');
   const contentType = result.reportContentType || FORMAT_MIME[normalizedFormat] || 'application/octet-stream';
@@ -476,54 +353,20 @@ async function runReport({
 
 // ============================================================
 //  4.  getReportDefinition  (WSDL-1 – ReportService)
-//
-//  Optional utility – used to inspect template IDs and default
-//  output format before presenting the run-report UI.
-//
-//  WSDL contract:
-//    <element name="getReportDefinition">
-//      <sequence>
-//        <element name="reportAbsolutePath" type="xsd:string"/>
-//        <element name="userID"             type="xsd:string"/>
-//        <element name="password"           type="xsd:string"/>
-//      </sequence>
-//    </element>
-//
-//    Returns: ReportDefinition
-//      reportName, reportDefnTitle, reportDescription,
-//      defaultOutputFormat, defaultTemplateId,
-//      templateIds (ArrayOfString),
-//      listOfTemplateFormatsLabelValues (per-template format/locale info),
-//      reportParameterNameValues (ArrayOfParamNameValue) – same as getReportParameters
 // ============================================================
 
-/**
- * Fetch full report definition metadata (templates, default format, description).
- *
- * @param {string} reportAbsolutePath
- * @returns {Promise<{
- *   reportName, title, description,
- *   defaultFormat, defaultTemplateId,
- *   templateIds: string[],
- *   availableFormats: Array<{templateId, formats: Array<{label,value}>}>,
- * }>}
- */
 async function getReportDefinition(reportAbsolutePath) {
   const bodyXml = `
     <v2:reportAbsolutePath>${xmlEsc(reportAbsolutePath)}</v2:reportAbsolutePath>
     <v2:userID>${xmlEsc(BIP_USER)}</v2:userID>
     <v2:password>${xmlEsc(BIP_PASS)}</v2:password>`;
-
   const body = await postSoap(REPORT_ENDPOINT, 'getReportDefinition', bodyXml);
-
   const def = body?.getReportDefinitionResponse?.getReportDefinitionReturn;
   if (!def) return null;
 
-  // Extract template IDs
   const rawTemplateIds = def.templateIds?.item || [];
   const templateIds = Array.isArray(rawTemplateIds) ? rawTemplateIds : [rawTemplateIds];
 
-  // Extract per-template format options
   const rawTemplates = def.listOfTemplateFormatsLabelValues?.item || [];
   const templates    = Array.isArray(rawTemplates) ? rawTemplates : [rawTemplates];
 
@@ -534,10 +377,7 @@ async function getReportDefinition(reportAbsolutePath) {
       templateId: t.templateID || '',
       active:     t.active === 'true',
       isDefault:  t.default === 'true',
-      formats: fmts.map((f) => ({
-        label: f.templateFormatLabel || '',
-        value: f.templateFormatValue || '',
-      })),
+      formats: fmts.map((f) => ({ label: f.templateFormatLabel || '', value: f.templateFormatValue || '' })),
     };
   });
 
@@ -547,25 +387,12 @@ async function getReportDefinition(reportAbsolutePath) {
     description:       def.reportDescription || '',
     defaultFormat:     def.defaultOutputFormat || 'pdf',
     defaultTemplateId: def.defaultTemplateId   || '',
-    templateIds,
-    availableFormats,
+    templateIds, availableFormats,
   };
 }
 
-// ============================================================
-//  MODULE EXPORTS
-// ============================================================
 module.exports = {
-  // Core operations used by API routes
-  getModules,            // Admin + Client: list modules from BIP root
-  getReportsByModule,    // Admin + Client: list reports in a module
-  getFolderContents,     // Low-level: list any folder (folder + report items)
-  getReportParameters,   // Client: get parameter definitions for a report
-  runReport,             // Client: execute a report, return buffer + metadata
-  getReportDefinition,   // Optional: get template/format metadata for a report
-
-  // Exported constants (useful in controllers for format validation)
-  FORMAT_MIME,
-  FORMAT_EXT,
-  SUPPORTED_FORMATS: Object.keys(FORMAT_MIME),
+  getModules, getReportsByModule, getFolderContents,
+  getReportParameters, runReport, getReportDefinition,
+  FORMAT_MIME, FORMAT_EXT, SUPPORTED_FORMATS: Object.keys(FORMAT_MIME),
 };
