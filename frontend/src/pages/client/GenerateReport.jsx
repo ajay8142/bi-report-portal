@@ -43,25 +43,34 @@ function ParamField({ param, value, onChange }) {
           labelId={`${name}-label`}
           value={safeValue}
           onChange={(e) => {
-            const { target: { value } } = e;
-            // When using `multiple`, the value can sometimes be a string on autofill.
-            // We ensure it's always an array.
-            let val = typeof value === 'string' ? value.split(',') : value;
-            if (val.includes('*') && val.length > 1) {
-              if (val[val.length - 1] === '*') {
-                val = ['*'];
-              } else {
-                val = val.filter((v) => v !== '*');
-              }
+            let selected = e.target.value;
+ 
+            // Remove * when a real value is selected
+            if (selected.includes('*') && selected.length > 1) {
+              selected = selected.filter(v => v !== '*');
             }
-            onChange(name, val);
+ 
+            // If everything is cleared, go back to *
+            if (selected.length === 0) {
+              selected = ['*'];
+            }
+ 
+            onChange(name, selected);
           }}
           input={<OutlinedInput label={displayLabel} notched />}
           renderValue={(selected) => {
-            return selected.map(val => {
-              const idx = lovValues.findIndex(v => v === val);
-              return idx >= 0 && lovLabels[idx] ? lovLabels[idx] : val;
-            }).join(', ');
+            if (selected.includes('*')) {
+              return <span>All</span>;
+            }
+ 
+            return selected
+              .map((val) => {
+                const idx = lovValues.findIndex((v) => v === val);
+                return idx >= 0 && lovLabels[idx]
+                  ? lovLabels[idx]
+                  : val;
+              })
+              .join(', ');
           }}
         >
           {lovLabels.map((lbl, i) => {
@@ -410,9 +419,9 @@ const s = {
   loading:    { color: '#888' },
   tableWrap:  { overflowX: 'auto' },
   table:      { width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)' },
-  th:         { padding: '12px 16px', background: '#1976d2', color: '#fff', textAlign: 'center', fontSize: '13px', fontWeight: 600 },
+  th:         { padding: '12px 16px', background: '#1976d2', color: '#fff', textAlign: 'left', fontSize: '13px', fontWeight: 600 },
   thNum:      { width: '70px', textAlign: 'center' },
-  td:         { padding: '12px 16px', fontSize: '13px', color: '#333', verticalAlign: 'middle' },
+  td:         { padding: '12px 16px', fontSize: '13px', color: '#333', verticalAlign: 'middle' , textAlign: 'left'},
   tdNum:      { width: '70px', textAlign: 'center', color: '#aaa', fontWeight: 600 },
   rowEven:    { background: '#fff' },
   rowOdd:     { background: '#f9fafb' },
