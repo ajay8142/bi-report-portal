@@ -69,9 +69,9 @@ export default function Clients() {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h2 style={s.heading}>Client Management</h2>
+        <h2 style={s.heading}>User Management</h2>
         <button style={s.addBtn} onClick={() => { setShowForm(true); setEditId(null); reset(); }}>
-          + Add Client
+          + Add User
         </button>
       </div>
 
@@ -150,7 +150,7 @@ export default function Clients() {
         <table style={s.table}>
           <thead>
             <tr>
-              {['#','Name','Email','Status','Created','Actions'].map(h => (
+              {['S No.','Name','Email','Status','Created','Actions'].map(h => (
                 <th key={h} style={s.th}>{h}</th>
               ))}
             </tr>
@@ -203,7 +203,7 @@ const s = {
   cancelBtn:   { padding:'10px 24px', background:'#f5f5f5', color:'#333', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600 },
   tableWrap:   { overflowX:'auto' },
   table:       { width:'100%', borderCollapse:'collapse', background:'#fff', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.08)' },
-  th:          { padding:'12px 16px', background:'#1976d2', color:'#fff', textAlign:'left', fontSize:'13px', fontWeight:600 },
+  th:          { padding:'12px 16px', background:'#1976d2', color:'#fff', textAlign:'center', fontSize:'13px', fontWeight:600 },
   td:          { padding:'12px 16px', fontSize:'13px', color:'#333' },
   rowEven:     { background:'#fff' },
   rowOdd:      { background:'#f9fafb' },

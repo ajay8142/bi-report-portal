@@ -12,5 +12,6 @@ router.get('/modules/reports',    ctrl.getReports);
 router.get('/reports/parameters',  ctrl.getParameters);
 router.post('/reports/parameters', ctrl.refreshParameters);
 router.post('/reports/run',        ctrl.runReport);
+router.get('/history',             ctrl.getHistory);
 
 module.exports = router;

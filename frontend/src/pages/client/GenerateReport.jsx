@@ -1,45 +1,63 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
-import { 
-  TextField, 
-  MenuItem, 
-  Select, 
-  InputLabel, 
-  FormControl, 
-  Checkbox, 
-  ListItemText, 
-  OutlinedInput 
+import {
+  TextField,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl,
+  Checkbox,
+  ListItemText,
+  OutlinedInput,
 } from '@mui/material';
 
-// Converts any BIP date value (ISO datetime or MM/dd/yyyy) to YYYY-MM-DD for <input type="date">
 function toHTMLDateValue(value) {
   if (!value) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;           // already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return value.split('T')[0]; // ISO datetime
-  return '';                                                        // unknown format — let user pick
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return value.split('T')[0];
+  return '';
 }
 
-// ── Parameter renderer (Updated for MUI) ──────────────────────
 function ParamField({ param, value, onChange }) {
-  const { name, label, dataType, UIType, multiValuesAllowed, lovLabels, values: lovValues, defaultValue, dateFormatString } = param;
-  
+  const { name, label, dataType, UIType, multiValuesAllowed, lovLabels, values: lovValues, defaultValue, mandatory, useNullForAll } = param;
+
   const isLov = (UIType === 'menu' || UIType === 'check' || UIType === 'radio') && lovLabels?.length > 0;
   const isDate = dataType === 'date' || UIType === 'date';
 
-  // 1. Multi-Select Dropdown
+  let indicator = '';
+  if (mandatory) {
+    indicator = ' *';
+  } else if (useNullForAll && multiValuesAllowed) {
+    indicator = ' (ALL)';
+  }
+  const displayLabel = `${label}${indicator}`;
+
   if (isLov && multiValuesAllowed) {
     const safeValue = Array.isArray(value) ? value : (value ? [value] : []);
     return (
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>{label}</InputLabel>
+      <FormControl fullWidth>
+        <InputLabel shrink id={`${name}-label`}>{displayLabel}</InputLabel>
         <Select
           multiple
+          labelId={`${name}-label`}
           value={safeValue}
-          onChange={(e) => onChange(name, e.target.value)}
-          input={<OutlinedInput label={label} />}
+          onChange={(e) => {
+            const { target: { value } } = e;
+            // When using `multiple`, the value can sometimes be a string on autofill.
+            // We ensure it's always an array.
+            let val = typeof value === 'string' ? value.split(',') : value;
+            if (val.includes('*') && val.length > 1) {
+              if (val[val.length - 1] === '*') {
+                val = ['*'];
+              } else {
+                val = val.filter((v) => v !== '*');
+              }
+            }
+            onChange(name, val);
+          }}
+          input={<OutlinedInput label={displayLabel} notched />}
           renderValue={(selected) => {
-            // Map the selected internal values to their readable labels
             return selected.map(val => {
               const idx = lovValues.findIndex(v => v === val);
               return idx >= 0 && lovLabels[idx] ? lovLabels[idx] : val;
@@ -60,57 +78,60 @@ function ParamField({ param, value, onChange }) {
     );
   }
 
-  // 2. Single Select Dropdown
   if (isLov && !multiValuesAllowed) {
     return (
       <TextField
         select
         fullWidth
-        label={label}
+        label={displayLabel}
         value={value || ''}
+        InputLabelProps={{ shrink: true }}
         onChange={(e) => onChange(name, e.target.value)}
-        sx={{ mb: 2 }}
       >
         <MenuItem value=""><em>-- Select --</em></MenuItem>
         {lovLabels.map((lbl, i) => (
-          <MenuItem key={i} value={lovValues[i] || lbl}>
-            {lbl}
-          </MenuItem>
+          <MenuItem key={i} value={lovValues[i] || lbl}>{lbl}</MenuItem>
         ))}
       </TextField>
     );
   }
 
-  // 3. Date Picker
   if (isDate) {
     return (
-      <TextField
-        fullWidth
-        type="date"
-        label={`${label} ${dateFormatString ? `(${dateFormatString})` : ''}`}
-        InputLabelProps={{ shrink: true }}
-        value={value || ''}
-        onChange={(e) => onChange(name, e.target.value)}
-        sx={{ mb: 2 }}
-      />
+      <FormControl fullWidth>
+        <InputLabel shrink htmlFor={`date-${name}`}>{displayLabel}</InputLabel>
+        <OutlinedInput
+          id={`date-${name}`}
+          type="date"
+          label={displayLabel}
+          notched
+          inputProps={{ max: '9999-12-31' }}
+          value={value || ''}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val && val.split('-')[0]?.length > 4) return;
+            onChange(name, val);
+          }}
+        />
+      </FormControl>
     );
   }
 
-  // 4. Standard Text/Number Field
   return (
     <TextField
       fullWidth
       type={dataType === 'integer' || dataType === 'float' ? 'number' : 'text'}
-      label={label}
+      label={displayLabel}
       placeholder={defaultValue || ''}
+      InputLabelProps={{ shrink: true }}
       value={value || ''}
       onChange={(e) => onChange(name, e.target.value)}
-      sx={{ mb: 2 }}
     />
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────
+const FORMATS = ['pdf', 'xlsx', 'html', 'csv', 'rtf', 'xml'];
+
 export default function GenerateReport() {
   const [modules,      setModules]      = useState([]);
   const [activeModule, setActiveModule] = useState(null);
@@ -119,10 +140,9 @@ export default function GenerateReport() {
   const [params,       setParams]       = useState([]);
   const [paramValues,  setParamValues]  = useState({});
   const [format,       setFormat]       = useState('pdf');
+  const [action,       setAction]       = useState('preview');
   const [loading,      setLoading]      = useState(false);
   const [running,      setRunning]      = useState(false);
-
-  const FORMATS = ['pdf','xlsx','html','csv','rtf','xml'];
 
   useEffect(() => {
     setLoading(true);
@@ -151,27 +171,22 @@ export default function GenerateReport() {
     setParamValues({});
     setLoading(true);
     try {
-      // Fetching parameters using the clean path
       const res = await api.get('/client/reports/parameters', { params: { path: report.absolutePath } });
-      
       const ps  = res.data.data || [];
       setParams(ps);
-      
-      // Pre-fill defaults intelligently based on single/multi value requirements
       const defaults = {};
       ps.forEach(p => {
         const isDate = p.dataType === 'date' || p.UIType === 'date';
         if (p.defaultValue) {
           if (isDate) {
-            // BIP may return defaults as ISO datetime or locale format; normalize to YYYY-MM-DD
             defaults[p.name] = toHTMLDateValue(p.defaultValue);
           } else {
             defaults[p.name] = p.multiValuesAllowed ? [p.defaultValue] : p.defaultValue;
           }
         } else if (p.multiValuesAllowed) {
-          defaults[p.name] = []; // Initialize empty array for multi-selects
+          defaults[p.name] = [];
         } else {
-          defaults[p.name] = ''; // Initialize empty string for others
+          defaults[p.name] = '';
         }
       });
       setParamValues(defaults);
@@ -184,21 +199,23 @@ export default function GenerateReport() {
   const runReport = async (action) => {
     setRunning(true);
     try {
-      // Format the exact payload expected by bipSoapService.js
-      const paramPayload = params.map(p => {
-        return {
-          name:               p.name,
-          dataType:           p.dataType, // Pass original dataType from BIP
-          UIType:             p.UIType,   // Pass original UIType as well
-          multiValuesAllowed: p.multiValuesAllowed,
-          dateFormatString:   p.dateFormatString,
-          values: Array.isArray(paramValues[p.name])
-            ? paramValues[p.name]
-            : paramValues[p.name] ? [paramValues[p.name]] : [],
-        };
-      });
+      const paramPayload = params.map(p => ({
+        name:               p.name,
+        dataType:           p.dataType,
+        UIType:             p.UIType,
+        multiValuesAllowed: p.multiValuesAllowed,
+        dateFormatString:   p.dateFormatString,
+        useNullForAll:      p.useNullForAll,
+        values: (() => {
+          const value = paramValues[p.name];
+          if (Array.isArray(value)) {
+            return value.filter(v => v !== null && v !== undefined && v !== '');
+          }
+          return value ? [String(value)] : [];
+        })(),
+      }));
 
-    const res = await api.post('/client/reports/run', {
+      const res = await api.post('/client/reports/run', {
         reportPath: activeReport.absolutePath,
         format,
         params: paramPayload,
@@ -229,13 +246,19 @@ export default function GenerateReport() {
 
       {/* Breadcrumb */}
       <div style={s.breadcrumb}>
-        <span style={activeModule ? s.link : s.cur} onClick={() => { setActiveModule(null); setActiveReport(null); setReports([]); setParams([]); }}>
+        <span
+          style={activeModule ? s.crumbLink : s.crumbCurrent}
+          onClick={() => { setActiveModule(null); setActiveReport(null); setReports([]); setParams([]); }}
+        >
           📁 Modules
         </span>
         {activeModule && (
           <>
             <span style={s.sep}> › </span>
-            <span style={activeReport ? s.link : s.cur} onClick={() => { setActiveReport(null); setParams([]); }}>
+            <span
+              style={activeReport ? s.crumbLink : s.crumbCurrent}
+              onClick={() => { setActiveReport(null); setParams([]); }}
+            >
               📂 {activeModule.displayName}
             </span>
           </>
@@ -243,119 +266,165 @@ export default function GenerateReport() {
         {activeReport && (
           <>
             <span style={s.sep}> › </span>
-            <span style={s.cur}>📄 {activeReport.displayName}</span>
+            <span style={s.crumbCurrent}>📄 {activeReport.displayName}</span>
           </>
         )}
       </div>
 
       {loading && <p style={s.loading}>Loading…</p>}
 
-      {/* Modules */}
+      {/* Modules Table */}
       {!activeModule && !loading && (
-        <div style={s.grid}>
-          {modules.length === 0
-            ? <p style={s.empty}>No modules assigned to you.</p>
-            : modules.map(mod => (
-              <div key={mod.absolutePath} style={s.card} onClick={() => loadReports(mod)}>
-                <div style={s.cardIcon}>📂</div>
-                <div style={s.cardName}>{mod.displayName}</div>
-              </div>
-            ))
-          }
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={{ ...s.th, ...s.thNum }}>S No.</th>
+                <th style={s.th}>Module Name</th>
+                <th style={s.th}>Path</th>
+              </tr>
+            </thead>
+            <tbody>
+              {modules.length === 0 ? (
+                <tr><td colSpan={3} style={s.empty}>No modules assigned to you.</td></tr>
+              ) : modules.map((mod, i) => (
+                <tr
+                  key={mod.absolutePath}
+                  style={{ ...(i % 2 === 0 ? s.rowEven : s.rowOdd), cursor: 'pointer' }}
+                  onClick={() => loadReports(mod)}
+                  onMouseEnter={e => e.currentTarget.style.background = '#e3f2fd'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#f9fafb'}
+                >
+                  <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
+                  <td style={s.td}>📂 {mod.displayName}</td>
+                  <td style={{ ...s.td, color: '#888', fontSize: '12px' }}>{mod.absolutePath}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Reports */}
+      {/* Reports Table */}
       {activeModule && !activeReport && !loading && (
-        <div style={s.grid}>
-          {reports.length === 0
-            ? <p style={s.empty}>No reports assigned in this module.</p>
-            : reports.map(r => (
-              <div key={r.absolutePath} style={s.card} onClick={() => loadParams(r)}>
-                <div style={s.cardIcon}>📄</div>
-                <div style={s.cardName}>{r.displayName}</div>
-              </div>
-            ))
-          }
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={{ ...s.th, ...s.thNum }}>S No.</th>
+                <th style={s.th}>Report Name</th>
+                <th style={s.th}>Path</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.length === 0 ? (
+                <tr><td colSpan={3} style={s.empty}>No reports assigned in this module.</td></tr>
+              ) : reports.map((r, i) => (
+                <tr
+                  key={r.absolutePath}
+                  style={{ ...(i % 2 === 0 ? s.rowEven : s.rowOdd), cursor: 'pointer' }}
+                  onClick={() => loadParams(r)}
+                  onMouseEnter={e => e.currentTarget.style.background = '#e3f2fd'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#f9fafb'}
+                >
+                  <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
+                  <td style={s.td}>📄 {r.displayName}</td>
+                  <td style={{ ...s.td, color: '#aaa', fontSize: '12px' }}>{r.absolutePath}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Report Runner */}
+      {/* Parameters & Output */}
       {activeReport && !loading && (
-        <div style={s.runner}>
-          {/* Parameters section */}
-          <div style={s.runnerTop}>
-            <h3 style={s.sectionTitle}>📋 Parameters</h3>
-            {params.length === 0
-              ? <p style={{ color:'#888', fontSize:'14px' }}>This report has no parameters.</p>
-              : (
-                <div style={s.paramGrid}>
-                  {params.map(p => (
-                    <ParamField key={p.name} param={p}
-                      value={paramValues[p.name]}
-                      onChange={handleParamChange} />
-                  ))}
-                </div>
-              )
-            }
+        <>
+          {/* Parameters Panel */}
+          <div style={s.panel}>
+            <h3 style={s.panelTitle}>Parameters</h3>
+            {params.length === 0 ? (
+              <p style={s.empty}>This report has no parameters.</p>
+            ) : (
+              <div style={s.paramGrid}>
+                {params.map(p => (
+                  <div key={p.name} style={s.paramCell}>
+                    <ParamField param={p} value={paramValues[p.name]} onChange={handleParamChange} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Output options */}
-          <div style={s.runnerBottom}>
-            <h3 style={s.sectionTitle}>⚙️ Output Options</h3>
+          {/* Output Options Panel */}
+          <div style={{ ...s.panel, background: '#f9fafb', marginTop: '16px' }}>
+            <h3 style={s.panelTitle}>Output Options</h3>
             <div style={s.outputRow}>
-              <div>
-                <label style={{ display:'block', marginBottom:'6px', fontSize:'13px', fontWeight:600, color:'#333' }}>Output Format</label>
-                <div style={s.formatGroup}>
+              <div style={s.outputField}>
+                <label style={s.label}>Output Format</label>
+                <select
+                  value={format}
+                  onChange={e => setFormat(e.target.value)}
+                  style={s.select}
+                >
                   {FORMATS.map(fmt => (
-                    <button key={fmt}
-                      style={{ ...s.fmtBtn, ...(format === fmt ? s.fmtBtnActive : {}) }}
-                      onClick={() => setFormat(fmt)}>
-                      {fmt.toUpperCase()}
-                    </button>
+                    <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
                   ))}
-                </div>
+                </select>
               </div>
-              <div style={s.runBtns}>
-                <button style={s.previewBtn} onClick={() => runReport('preview')} disabled={running}>
-                  {running ? 'Running…' : '👁 Preview'}
-                </button>
-                <button style={s.downloadBtn} onClick={() => runReport('download')} disabled={running}>
-                  {running ? 'Running…' : '⬇ Download'}
-                </button>
+              <div style={s.outputField}>
+                <label style={s.label}>Action</label>
+                <select
+                  value={action}
+                  onChange={e => setAction(e.target.value)}
+                  style={s.select}
+                >
+                  <option value="preview">Preview</option>
+                  <option value="download">Download</option>
+                </select>
               </div>
             </div>
+            <div style={s.runWrap}>
+              <button
+                style={{ ...s.runBtn, opacity: running ? 0.7 : 1, cursor: running ? 'not-allowed' : 'pointer' }}
+                onClick={() => runReport(action)}
+                disabled={running}
+              >
+                {running ? 'Running…' : '▶ Run Report'}
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-// ── Custom Styles ─────────────────────────────────────────────
 const s = {
-  page:         { padding:'32px' },
-  heading:      { fontSize:'22px', fontWeight:700, color:'#1a1a2e', marginBottom:'12px' },
-  breadcrumb:   { marginBottom:'20px', fontSize:'14px', display:'flex', alignItems:'center', gap:'4px' },
-  link:         { cursor:'pointer', color:'#1976d2', fontWeight:600 },
-  cur:          { color:'#333', fontWeight:600 },
-  sep:          { color:'#bbb' },
-  loading:      { color:'#888' },
-  empty:        { color:'#aaa', fontSize:'14px' },
-  grid:         { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:'16px' },
-  card:         { background:'#fff', borderRadius:'10px', padding:'20px', boxShadow:'0 2px 10px rgba(0,0,0,0.08)', cursor:'pointer', textAlign:'center', border:'1px solid #eee' },
-  cardIcon:     { fontSize:'32px', marginBottom:'8px' },
-  cardName:     { fontWeight:700, fontSize:'13px', color:'#1a1a2e' },
-  runner:       { background:'#fff', borderRadius:'12px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)', overflow:'hidden', marginTop: '20px' },
-  runnerTop:    { padding:'30px', borderBottom:'1px solid #f0f0f0' },
-  runnerBottom: { padding:'24px', backgroundColor: '#fafafa' },
-  sectionTitle: { fontSize:'16px', fontWeight:700, color:'#1a1a2e', margin:'0 0 20px' },
-  paramGrid:    { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:'16px 32px' },
-  outputRow:    { display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:'20px' },
-  formatGroup:  { display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'8px' },
-  fmtBtn:       { padding:'8px 16px', border:'1px solid #ddd', borderRadius:'6px', background:'#fff', cursor:'pointer', fontWeight:600, fontSize:'12px', color:'#555' },
-  fmtBtnActive: { background:'#1976d2', color:'#fff', border:'1px solid #1976d2' },
-  runBtns:      { display:'flex', gap:'12px' },
-  previewBtn:   { padding:'10px 24px', background:'#fff', color:'#388e3c', border:'1px solid #388e3c', borderRadius:'8px', cursor:'pointer', fontWeight:600, fontSize:'14px' },
-  downloadBtn:  { padding:'10px 24px', background:'#1976d2', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600, fontSize:'14px' },
+  page:       { padding: '32px' },
+  heading:    { fontSize: '22px', fontWeight: 700, color: '#1a1a2e', marginBottom: '8px', textAlign: 'center' },
+  breadcrumb: { marginBottom: '16px', fontSize: '14px' },
+  crumbLink:  { cursor: 'pointer', color: '#1976d2', fontWeight: 600 },
+  crumbCurrent:{ color: '#333', fontWeight: 600 },
+  sep:        { margin: '0 6px', color: '#bbb' },
+  loading:    { color: '#888' },
+  tableWrap:  { overflowX: 'auto' },
+  table:      { width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.08)' },
+  th:         { padding: '12px 16px', background: '#1976d2', color: '#fff', textAlign: 'center', fontSize: '13px', fontWeight: 600 },
+  thNum:      { width: '70px', textAlign: 'center' },
+  td:         { padding: '12px 16px', fontSize: '13px', color: '#333', verticalAlign: 'middle' },
+  tdNum:      { width: '70px', textAlign: 'center', color: '#aaa', fontWeight: 600 },
+  rowEven:    { background: '#fff' },
+  rowOdd:     { background: '#f9fafb' },
+  empty:      { padding: '24px', textAlign: 'center', color: '#aaa' },
+  panel:      { background: '#fff', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', padding: '24px' },
+  panelTitle: { fontSize: '15px', fontWeight: 700, color: '#1a1a2e', marginBottom: '20px', textAlign: 'center' },
+  paramGrid:  { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' },
+  paramCell:  { minWidth: 0 },
+  outputRow:  { display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '20px' },
+  outputField:{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' },
+  label:      { fontSize: '13px', fontWeight: 600, color: '#555' },
+  select:     { padding: '10px 14px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', color: '#333', background: '#fff', cursor: 'pointer' },
+  runWrap:    { display: 'flex', justifyContent: 'center' },
+  runBtn:     { padding: '12px 36px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 700, cursor: 'pointer' },
 };

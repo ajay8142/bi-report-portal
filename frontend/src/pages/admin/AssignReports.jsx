@@ -75,15 +75,34 @@ export default function AssignReports() {
       {/* Step 1: Select Client */}
       {!selectedClient ? (
         <>
-          <p style={s.sub}>Select a client to manage their report assignments:</p>
-          <div style={s.grid}>
-            {clients.map(c => (
-              <div key={c.USER_ID} style={s.clientCard} onClick={() => selectClient(c)}>
-                <div style={s.avatar}>{c.NAME[0].toUpperCase()}</div>
-                <div style={s.clientName}>{c.NAME}</div>
-                <div style={s.clientEmail}>{c.EMAIL}</div>
-              </div>
-            ))}
+          <p style={s.sub}>Select a User to manage their report assignments:</p>
+          <div style={s.tableWrap}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={{ ...s.th, ...s.thNum }}>S No.</th>
+                  <th style={{ ...s.th }}>User Name</th>
+                  <th style={{ ...s.th }}>Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.length === 0 ? (
+                  <tr><td colSpan={3} style={s.empty}>No Users found</td></tr>
+                ) : clients.map((c, i) => (
+                  <tr
+                    key={c.USER_ID}
+                    style={{ ...(i % 2 === 0 ? s.rowEven : s.rowOdd), cursor:'pointer' }}
+                    onClick={() => selectClient(c)}
+                    onMouseEnter={e => e.currentTarget.style.background = '#e3f2fd'}
+                    onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#f9fafb'}
+                  >
+                    <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
+                    <td style={s.td}>👤 {c.NAME}</td>
+                    <td style={{ ...s.td, color:'#888' }}>{c.EMAIL}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       ) : (
@@ -114,13 +133,33 @@ export default function AssignReports() {
 
           {/* Modules */}
           {!activeModule && !loading && (
-            <div style={s.grid}>
-              {modules.map(mod => (
-                <div key={mod.absolutePath} style={s.modCard} onClick={() => loadReports(mod)}>
-                  <div style={s.modIcon}>📂</div>
-                  <div style={s.modName}>{mod.displayName}</div>
-                </div>
-              ))}
+            <div style={s.tableWrap}>
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...s.th, ...s.thNum }}>S No.</th>
+                    <th style={{ ...s.th }}>Module Name</th>
+                    <th style={{ ...s.th }}>Path</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modules.length === 0 ? (
+                    <tr><td colSpan={3} style={s.empty}>No modules found</td></tr>
+                  ) : modules.map((mod, i) => (
+                    <tr
+                      key={mod.absolutePath}
+                      style={{ ...(i % 2 === 0 ? s.rowEven : s.rowOdd), cursor:'pointer' }}
+                      onClick={() => loadReports(mod)}
+                      onMouseEnter={e => e.currentTarget.style.background = '#e3f2fd'}
+                      onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#f9fafb'}
+                    >
+                      <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
+                      <td style={s.td}>📂 {mod.displayName}</td>
+                      <td style={{ ...s.td, color:'#888', fontSize:'12px' }}>{mod.absolutePath}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -130,18 +169,20 @@ export default function AssignReports() {
               <table style={s.table}>
                 <thead>
                   <tr>
-                    <th style={s.th}>Report Name</th>
-                    <th style={s.th}>Path</th>
-                    <th style={{ ...s.th, textAlign:'center' }}>Assigned</th>
+                    <th style={{ ...s.th, ...s.thNum }}>S No.</th>
+                    <th style={{ ...s.th }}>Report Name</th>
+                    <th style={{ ...s.th}}>Path</th>
+                    <th style={{ ...s.th}}>Assigned</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reports.length === 0
-                    ? <tr><td colSpan={3} style={s.empty}>No reports in this module</td></tr>
+                    ? <tr><td colSpan={4} style={s.empty}>No reports in this module</td></tr>
                     : reports.map((r, i) => {
                         const enabled = !!assignments[r.absolutePath];
                         return (
                           <tr key={r.absolutePath} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                            <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                             <td style={s.td}>📄 {r.displayName}</td>
                             <td style={{ ...s.td, color:'#aaa', fontSize:'12px' }}>{r.absolutePath}</td>
                             <td style={{ ...s.td, textAlign:'center' }}>
@@ -171,11 +212,6 @@ const s = {
   page:         { padding:'32px' },
   heading:      { fontSize:'22px', fontWeight:700, color:'#1a1a2e', marginBottom:'8px' },
   sub:          { color:'#666', marginBottom:'20px' },
-  grid:         { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:'16px' },
-  clientCard:   { background:'#fff', borderRadius:'10px', padding:'20px', boxShadow:'0 2px 10px rgba(0,0,0,0.08)', cursor:'pointer', textAlign:'center', border:'1px solid #eee' },
-  avatar:       { width:'48px', height:'48px', borderRadius:'50%', background:'#1976d2', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'22px', fontWeight:700, margin:'0 auto 10px' },
-  clientName:   { fontWeight:700, fontSize:'14px', color:'#1a1a2e' },
-  clientEmail:  { fontSize:'12px', color:'#888', marginTop:'4px' },
   clientHeader: { display:'flex', alignItems:'center', gap:'16px', marginBottom:'16px', flexWrap:'wrap' },
   backBtn:      { padding:'8px 16px', background:'#f5f5f5', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600 },
   clientInfo:   { flex:1, color:'#333', fontSize:'14px' },
@@ -185,13 +221,12 @@ const s = {
   crumbCurrent: { color:'#333', fontWeight:600 },
   sep:          { margin:'0 6px', color:'#bbb' },
   loading:      { color:'#888' },
-  modCard:      { background:'#fff', borderRadius:'10px', padding:'20px', boxShadow:'0 2px 10px rgba(0,0,0,0.08)', cursor:'pointer', textAlign:'center', border:'1px solid #eee' },
-  modIcon:      { fontSize:'32px', marginBottom:'8px' },
-  modName:      { fontWeight:700, fontSize:'14px', color:'#1a1a2e' },
   tableWrap:    { overflowX:'auto' },
   table:        { width:'100%', borderCollapse:'collapse', background:'#fff', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.08)' },
-  th:           { padding:'12px 16px', background:'#1976d2', color:'#fff', textAlign:'left', fontSize:'13px', fontWeight:600 },
-  td:           { padding:'12px 16px', fontSize:'13px', color:'#333' },
+  th:           { padding:'12px 16px', background:'#1976d2', color:'#fff', textAlign:'center', fontSize:'13px', fontWeight:600 },
+  thNum:        { width:'70px', textAlign:'center' },
+  td:           { padding:'12px 16px', fontSize:'13px', color:'#333', verticalAlign:'middle' },
+  tdNum:        { width:'70px', textAlign:'center', color:'#aaa', fontWeight:600 },
   rowEven:      { background:'#fff' },
   rowOdd:       { background:'#f9fafb' },
   empty:        { padding:'24px', textAlign:'center', color:'#aaa' },

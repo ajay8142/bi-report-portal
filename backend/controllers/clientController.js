@@ -143,10 +143,11 @@ exports.runReport = async (req, res) => {
       timezone: timezone || 'Asia/Calcutta',
     });
 
+    const reportName = reportPath.split('/').pop(); // Use the clean path name for the report name
     await db.execute(
-      `INSERT INTO AUDIT_LOGS (USER_ID, ACTION, DETAILS, IP_ADDRESS)
-       VALUES (:userId, 'RUN_REPORT', :details, :ip)`,
-      { userId, details: JSON.stringify({ reportPath: oraclePath, format }), ip: req.ip || '' }
+      `INSERT INTO AUDIT_LOGS (USER_ID, REPORT_NAME, ACTION, FORMAT)
+       VALUES (:userId, :reportName, :action, :format)`,
+      { userId, reportName, action: action || 'download', format: format.toUpperCase() }
     );
 
     const disposition = action === 'preview' ? 'inline' : 'attachment';
@@ -159,5 +160,32 @@ exports.runReport = async (req, res) => {
   } catch (err) {
     console.error("🚨 Run Report Error:", err.message);
     res.status(500).json({ success: false, message: 'Failed to run report' });
+  }
+};
+
+exports.getHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const result = await db.execute(
+      `SELECT LOG_ID, REPORT_NAME, ACTION, FORMAT, CREATED_AT
+       FROM AUDIT_LOGS
+       WHERE USER_ID = :userId
+       ORDER BY CREATED_AT DESC
+       FETCH FIRST 200 ROWS ONLY`,
+      { userId }
+    );
+
+    const history = result.rows.map(row => ({
+      LOG_ID:      row.LOG_ID,
+      REPORT_NAME: row.REPORT_NAME,
+      ACTION:      row.ACTION,
+      FORMAT:      row.FORMAT,
+      CREATED_AT:  row.CREATED_AT,
+    }));
+
+    res.json({ success: true, data: history });
+  } catch (error) {
+    console.error("🚨 History Fetch Error:", error);
+    res.status(500).json({ success: false, message: 'Failed to fetch history' });
   }
 };

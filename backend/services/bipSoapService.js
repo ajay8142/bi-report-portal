@@ -169,6 +169,9 @@ async function getReportParameters(reportAbsolutePath, currentParams = []) {
         return Array.isArray(arr.item) ? arr.item : [arr.item];
       };
 
+      const useNullForAll = p.useNullForAll === 'true' || p.useNullForAll === true;
+      const hasDefault = !!p.defaultValue;
+
       return {
         name:                  p.name                  || '',
         label:                 p.label                 || p.name || '',
@@ -179,7 +182,10 @@ async function getReportParameters(reportAbsolutePath, currentParams = []) {
         dateFormatString:      p.dateFormatString      || 'MM/dd/yyyy',
         refreshParamOnChange:  p.refreshParamOnChange  === 'true',
         selectAll:             p.selectAll             === 'true',
-        useNullForAll:         p.useNullForAll         === 'true',
+        useNullForAll:         useNullForAll,
+        // A parameter is considered mandatory if it's not optional (useNullForAll=false)
+        // and it doesn't have a default value to fall back on.
+        mandatory:             !useNullForAll && !hasDefault,
         values:                parseStringArray(p.values),
         lovLabels:             parseStringArray(p.lovLabels),
       };
@@ -250,6 +256,13 @@ function buildParamXml(params = []) {
       // The frontend ensures p.values is an array. Filter out any blank/null values.
       const valueItems = (p.values || []).filter(v => v !== null && v !== undefined && v !== '');
 
+      // If `useNullForAll` is true and the user selected no values, BIP expects us to
+      // omit the parameter entirely from the request. This makes it use the "All" default.
+      // The frontend now passes the `useNullForAll` flag for this check.
+      if (p.useNullForAll && valueItems.length === 0) {
+        return ''; // Skip this parameter
+      }
+
       const isTrueDate = p.dataType === 'date';
       const isStringDate = !isTrueDate && p.UIType === 'date';
 
@@ -295,6 +308,7 @@ function buildParamXml(params = []) {
           </v2:values>
         </v2:item>`;
     })
+    .filter(Boolean) // Remove any empty strings from skipped parameters
     .join('');
 
   if (!items) return '';

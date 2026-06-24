@@ -36,7 +36,7 @@ export default function Login() {
     <div style={s.page}>
       <div style={s.card}>
         <div style={s.logo}>📊</div>
-        <h2 style={s.title}>BI Report Portal</h2>
+        <h2 style={s.title}>Profinch Reporting Tool</h2>
         <p style={s.sub}>Sign in to continue</p>
         <form onSubmit={handleSubmit(onSubmit)}>
           <div style={s.field}>

@@ -101,9 +101,9 @@ export default function Profile() {
 }
 
 const s = {
-  page:      { padding:'32px', maxWidth:'800px' },
-  heading:   { fontSize:'22px', fontWeight:700, color:'#1a1a2e', marginBottom:'24px' },
-  card:      { background:'#fff', borderRadius:'12px', padding:'32px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)' },
+  page:      { padding:'32px', maxWidth:'800px', margin:'0 auto', display:'flex', flexDirection:'column', alignItems:'center' },
+  heading:   { fontSize:'22px', fontWeight:700, color:'#1a1a2e', marginBottom:'24px', textAlign:'center', width:'100%' },
+  card:      { background:'#fff', borderRadius:'12px', padding:'32px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)', width:'100%' },
   avatarWrap:{ textAlign:'center', marginBottom:'24px' },
   avatar:    { width:'80px', height:'80px', borderRadius:'50%', background:'#1976d2', color:'#fff', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:'36px', fontWeight:700 },
   infoGrid:  { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'24px' },
@@ -114,7 +114,7 @@ const s = {
   actions:   { display:'flex', gap:'12px' },
   pwdBtn:    { padding:'10px 20px', background:'#1976d2', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600 },
   logoutBtn: { padding:'10px 20px', background:'#fce4ec', color:'#c62828', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:600 },
-  formCard:  { background:'#fff', borderRadius:'12px', padding:'28px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)', marginTop:'24px' },
+  formCard:  { background:'#fff', borderRadius:'12px', padding:'28px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)', marginTop:'24px', width:'100%' },
   formTitle: { margin:'0 0 20px', fontSize:'16px', fontWeight:700, color:'#1a1a2e' },
   formRow:   { display:'flex', gap:'16px', flexWrap:'wrap', marginBottom:'16px' },
   field:     { flex:'1', minWidth:'200px' },

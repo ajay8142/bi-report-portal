@@ -9,6 +9,7 @@ import Clients from './pages/admin/Clients';
 import AssignReports from './pages/admin/AssignReports';
 import Profile from './pages/client/Profile';
 import GenerateReport from './pages/client/GenerateReport';
+import ReportHistory from './pages/client/ReportHistory';
 import AdminLayout from './components/AdminLayout';
 import ClientLayout from './components/ClientLayout';
 
@@ -34,6 +35,7 @@ export default function App() {
             <Route index element={<Navigate to="generate" replace />} />
             <Route path="profile"  element={<Profile />} />
             <Route path="generate" element={<GenerateReport />} />
+            <Route path="history"  element={<ReportHistory />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />
