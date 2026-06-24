@@ -1,5 +1,48 @@
+const oracledb = require('oracledb');
 const db  = require('../config/db');
 const bip = require('../services/bipSoapService');
+
+async function applyAccessFilter(userId, params) {
+  try {
+    const result = await db.execute(
+      `SELECT ACCESS_LIST FROM REPORT_ACCESS_CONTROL WHERE USER_ID = TO_CHAR(:userId)`,
+      { userId },
+      { fetchInfo: { ACCESS_LIST: { type: oracledb.STRING } } }
+    );
+    if (!result.rows.length) return params;
+
+    const raw = result.rows[0].ACCESS_LIST;
+    const accessList = typeof raw === 'string' ? JSON.parse(raw) : raw;
+
+    return params.map(param => {
+      // Match by parameter display label (case-insensitive) against access control keys
+      const paramLabel = (param.label || param.name).toUpperCase();
+      const matchedKey = Object.keys(accessList).find(k => k.toUpperCase() === paramLabel);
+
+      if (!matchedKey) return param;
+
+      const allowed = accessList[matchedKey];
+      if (!allowed.length) return param;
+
+      const allowedSet = new Set(allowed.map(v => String(v).toUpperCase()));
+      const lovValues  = param.values   || [];
+      const lovLabels  = param.lovLabels || [];
+
+      const kept = lovValues
+        .map((v, i) => ({ v, label: lovLabels[i] ?? v }))
+        .filter(({ v }) => allowedSet.has(String(v).toUpperCase()));
+
+      return {
+        ...param,
+        values:    kept.map(x => x.v),
+        lovLabels: kept.map(x => x.label),
+      };
+    });
+  } catch (err) {
+    console.error('Access filter error:', err.message);
+    return params;
+  }
+}
 
 // --- Helper to format Oracle .xdo paths ---
 // Converts: "/Generic Reports/CASA/Dormant Accounts"
@@ -74,8 +117,9 @@ exports.getParameters = async (req, res) => {
   const oraclePath = formatOraclePath(rawPath);
 
   try {
-    const params = await bip.getReportParameters(oraclePath);
-    res.json({ success: true, data: params });
+    const params   = await bip.getReportParameters(oraclePath);
+    const filtered = await applyAccessFilter(userId, params);
+    res.json({ success: true, data: filtered });
   } catch (err) {
     console.error("🚨 Parameter Fetch Error:", err.message);
     res.status(500).json({ success: false, message: 'Failed to fetch parameters' });
@@ -102,8 +146,9 @@ exports.refreshParameters = async (req, res) => {
   const oraclePath = formatOraclePath(rawPath);
 
   try {
-    const params = await bip.getReportParameters(oraclePath, currentParams);
-    res.json({ success: true, data: params });
+    const params   = await bip.getReportParameters(oraclePath, currentParams);
+    const filtered = await applyAccessFilter(userId, params);
+    res.json({ success: true, data: filtered });
   } catch (err) {
     console.error("🚨 Parameter Refresh Error:", err.message);
     res.status(500).json({ success: false, message: 'Failed to refresh parameters' });

@@ -17,4 +17,14 @@ router.get('/assignments/:clientId',             ctrl.getAssignments);
 router.post('/assignments',                      ctrl.toggleAssignment);
 router.put('/assignments/:clientId/disable-all', ctrl.disableAllAssignments);
 
+// Branch access
+router.get('/access/branches',                     ctrl.getBranches);
+router.post('/access/branches',                    ctrl.addBranch);
+router.delete('/access/branches/:userId/:code',    ctrl.deleteBranch);
+
+// Product access
+router.get('/access/products',                     ctrl.getProducts);
+router.post('/access/products',                    ctrl.addProduct);
+router.delete('/access/products/:userId/:code',    ctrl.deleteProduct);
+
 module.exports = router;

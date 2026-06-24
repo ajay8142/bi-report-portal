@@ -7,6 +7,7 @@ import Dashboard from './pages/admin/Dashboard';
 import ViewReports from './pages/admin/ViewReports';
 import Clients from './pages/admin/Clients';
 import AssignReports from './pages/admin/AssignReports';
+import UserAccess    from './pages/admin/UserAccess';
 import Profile from './pages/client/Profile';
 import GenerateReport from './pages/client/GenerateReport';
 import ReportHistory from './pages/client/ReportHistory';
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="view-reports" element={<ViewReports />} />
             <Route path="clients"      element={<Clients />} />
             <Route path="assign"       element={<AssignReports />} />
+            <Route path="user-access"  element={<UserAccess />} />
           </Route>
 
           {/* Client Routes */}

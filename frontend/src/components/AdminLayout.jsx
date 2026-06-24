@@ -4,10 +4,12 @@ import { useAuth } from '../context/AuthContext';
 const navItems = [
   { to: '/admin/dashboard',    icon: '📊', label: 'Dashboard'      },
   { to: '/admin/view-reports', icon: '📁', label: 'View Reports'   },
-  { to: '/admin/clients',      icon: '👥', label: 'Users'        },
+  { to: '/admin/clients',      icon: '👥', label: 'Users'          },
   { to: '/admin/assign',       icon: '🔗', label: 'Assign Reports' },
+  { to: '/admin/user-access',  icon: '🔐', label: 'User Access'    },
 ];
 
+// ─── Admin Layout ─────────────────────────────────────────────────────────────
 export default function AdminLayout() {
   const { user, logout } = useAuth();
 
@@ -41,24 +43,26 @@ export default function AdminLayout() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = {
-  shell:       { display:'flex', flexDirection:'column', minHeight:'100vh', fontFamily:'Inter,sans-serif' },
+  shell:      { display:'flex', flexDirection:'column', minHeight:'100vh', fontFamily:'Inter,sans-serif' },
 
-  topbar:      { display:'flex', alignItems:'center', gap:'8px',
-                 background:'#1a1a2e', padding:'0 24px', height:'56px', flexShrink:0,
-                 borderBottom:'1px solid #2a2a4e' },
-  brandText:   { fontSize:'17px', fontWeight:800, color:'#fff', marginRight:'16px', whiteSpace:'nowrap' },
+  topbar:     { display:'flex', alignItems:'center', gap:'8px',
+                background:'#1a1a2e', padding:'0 24px', height:'56px', flexShrink:0,
+                borderBottom:'1px solid #2a2a4e' },
+  brandText:  { fontSize:'17px', fontWeight:800, color:'#fff', marginRight:'16px', whiteSpace:'nowrap' },
 
-  nav:         { display:'flex', alignItems:'center', gap:'4px', flex:1 },
-  link:        { display:'flex', alignItems:'center', gap:'7px', padding:'7px 12px',
-                 borderRadius:'8px', color:'#aab', textDecoration:'none', fontSize:'13px',
-                 fontWeight:500, whiteSpace:'nowrap' },
-  linkActive:  { background:'#1976d2', color:'#fff' },
+  nav:        { display:'flex', alignItems:'center', gap:'4px', flex:1 },
+  link:       { display:'flex', alignItems:'center', gap:'7px', padding:'7px 12px',
+                borderRadius:'8px', color:'#aab', textDecoration:'none', fontSize:'13px',
+                fontWeight:500, whiteSpace:'nowrap', border:'none', background:'transparent', cursor:'pointer' },
+  linkActive: { background:'#1976d2', color:'#fff' },
 
-  topbarRight: { display:'flex', alignItems:'center', gap:'12px', marginLeft:'auto' },
-  userName:    { color:'#ccc', fontSize:'13px', fontWeight:600, whiteSpace:'nowrap' },
-  logoutBtn:   { padding:'6px 16px', background:'#c62828', color:'#fff', border:'none',
-                 borderRadius:'6px', cursor:'pointer', fontWeight:600, fontSize:'13px' },
+  topbarRight:{ display:'flex', alignItems:'center', gap:'12px', marginLeft:'auto' },
 
-  main:        { flex:1, background:'#f0f2f5', overflowY:'auto' },
+  userName:   { color:'#ccc', fontSize:'13px', fontWeight:600, whiteSpace:'nowrap' },
+  logoutBtn:  { padding:'6px 16px', background:'#c62828', color:'#fff', border:'none',
+                borderRadius:'6px', cursor:'pointer', fontWeight:600, fontSize:'13px' },
+
+  main:       { flex:1, background:'#f0f2f5', overflowY:'auto' },
 };

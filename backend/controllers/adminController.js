@@ -136,3 +136,87 @@ exports.disableAllAssignments = async (req, res) => {
   );
   res.json({ success: true, message: 'All reports disabled' });
 };
+
+// ── Branch Access ─────────────────────────────────────────────────────────────
+
+exports.getBranches = async (req, res) => {
+  const result = await db.execute(
+    `SELECT ba.USER_ID, u.NAME AS USER_NAME, ba.BRANCH_CODE
+     FROM BRANCH_ACCESS ba
+     JOIN USERS u ON ba.USER_ID = u.USER_ID
+     ORDER BY u.NAME, ba.BRANCH_CODE`
+  );
+  res.json({ success: true, data: result.rows });
+};
+
+exports.addBranch = async (req, res) => {
+  const { userId, code } = req.body;
+  if (!userId || !code?.trim())
+    return res.status(400).json({ success: false, message: 'User ID and branch code are required' });
+
+  const dup = await db.execute(
+    `SELECT USER_ID FROM BRANCH_ACCESS
+     WHERE USER_ID=:userId AND UPPER(BRANCH_CODE)=UPPER(:code)`,
+    { userId: Number(userId), code: code.trim() }
+  );
+  if (dup.rows.length)
+    return res.status(409).json({ success: false, message: 'This branch code is already assigned to the user' });
+
+  await db.execute(
+    `INSERT INTO BRANCH_ACCESS (USER_ID, BRANCH_CODE) VALUES (:userId, :code)`,
+    { userId: Number(userId), code: code.trim().toUpperCase() }
+  );
+  res.status(201).json({ success: true, message: 'Branch access added' });
+};
+
+exports.deleteBranch = async (req, res) => {
+  const { userId, code } = req.params;
+  await db.execute(
+    `DELETE FROM BRANCH_ACCESS
+     WHERE USER_ID=:userId AND UPPER(BRANCH_CODE)=UPPER(:code)`,
+    { userId: Number(userId), code: decodeURIComponent(code) }
+  );
+  res.json({ success: true, message: 'Branch access removed' });
+};
+
+// ── Product Access ────────────────────────────────────────────────────────────
+
+exports.getProducts = async (req, res) => {
+  const result = await db.execute(
+    `SELECT pa.USER_ID, u.NAME AS USER_NAME, pa.PRODUCT_CODE
+     FROM PRODUCT_ACCESS pa
+     JOIN USERS u ON pa.USER_ID = u.USER_ID
+     ORDER BY u.NAME, pa.PRODUCT_CODE`
+  );
+  res.json({ success: true, data: result.rows });
+};
+
+exports.addProduct = async (req, res) => {
+  const { userId, code } = req.body;
+  if (!userId || !code?.trim())
+    return res.status(400).json({ success: false, message: 'User ID and product code are required' });
+
+  const dup = await db.execute(
+    `SELECT USER_ID FROM PRODUCT_ACCESS
+     WHERE USER_ID=:userId AND UPPER(PRODUCT_CODE)=UPPER(:code)`,
+    { userId: Number(userId), code: code.trim() }
+  );
+  if (dup.rows.length)
+    return res.status(409).json({ success: false, message: 'This product code is already assigned to the user' });
+
+  await db.execute(
+    `INSERT INTO PRODUCT_ACCESS (USER_ID, PRODUCT_CODE) VALUES (:userId, :code)`,
+    { userId: Number(userId), code: code.trim().toUpperCase() }
+  );
+  res.status(201).json({ success: true, message: 'Product access added' });
+};
+
+exports.deleteProduct = async (req, res) => {
+  const { userId, code } = req.params;
+  await db.execute(
+    `DELETE FROM PRODUCT_ACCESS
+     WHERE USER_ID=:userId AND UPPER(PRODUCT_CODE)=UPPER(:code)`,
+    { userId: Number(userId), code: decodeURIComponent(code) }
+  );
+  res.json({ success: true, message: 'Product access removed' });
+};
