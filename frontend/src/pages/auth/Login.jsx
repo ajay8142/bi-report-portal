@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import profinchLogo from '../../assets/profinchlogo.png';
 
 const schema = yup.object({
   email:    yup.string().email('Invalid email').required('Email is required'),
@@ -35,9 +36,11 @@ export default function Login() {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <div style={s.logo}>📊</div>
-        <h2 style={s.title}>Profinch Reporting Tool</h2>
-        <p style={s.sub}>Sign in to continue</p>
+        <div style={s.logoWrap}>
+          <img src={profinchLogo} alt="Profinch" style={s.logo} />
+          <h2 style={s.title}>Profinch ReportX</h2>
+        </div>
+  
         <form onSubmit={handleSubmit(onSubmit)}>
           <div style={s.field}>
             <label style={s.label}>Email</label>
@@ -59,10 +62,19 @@ export default function Login() {
 }
 
 const s = {
-  page:  { minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f0f2f5' },
-  card:  { background:'#fff', padding:'40px', borderRadius:'12px', boxShadow:'0 4px 24px rgba(0,0,0,0.1)', width:'100%', maxWidth:'400px' },
-  logo:  { textAlign:'center', fontSize:'40px', marginBottom:'8px' },
-  title: { textAlign:'center', margin:'0 0 4px', fontSize:'24px', fontWeight:700, color:'#1a1a2e' },
+  page:  {
+    minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
+    background:`
+      radial-gradient(ellipse at 15% 20%,  rgba(21,101,192,0.75)  0%, transparent 45%),
+      radial-gradient(ellipse at 70% 10%,  rgba(198,40,40,0.65)   0%, transparent 45%),
+      radial-gradient(ellipse at 85% 80%,  rgba(106,27,154,0.75)  0%, transparent 45%),
+      #0a0f1e
+    `.replace(/\s+/g,' '),
+  },
+  card:  { background:'rgba(255,255,255,0.95)', padding:'40px', borderRadius:'16px', boxShadow:'0 8px 40px rgba(0,0,0,0.4)', width:'100%', maxWidth:'400px', backdropFilter:'blur(8px)' },
+  logoWrap: { textAlign:'center', marginBottom:'16px' },
+  logo:     { height:'56px', objectFit:'contain' },
+  title:    { margin:'10px 0 0', fontSize:'22px', fontWeight:700, color:'#1a1a2e' },
   sub:   { textAlign:'center', color:'#888', marginBottom:'28px', fontSize:'14px' },
   field: { marginBottom:'16px' },
   label: { display:'block', marginBottom:'6px', fontSize:'13px', fontWeight:600, color:'#333' },

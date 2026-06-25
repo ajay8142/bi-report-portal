@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import profinchLogo from '../assets/profinchlogo.png';
 
 const navItems = [
   { to: '/client/generate', icon: '📄', label: 'Generate Report' },
@@ -12,7 +13,7 @@ export default function ClientLayout() {
   return (
     <div style={s.shell}>
       <header style={s.topbar}>
-        <div style={s.brandText}>📊 Profinch Reporting Tool</div>
+        <img src={profinchLogo} alt="Profinch" style={s.logo} />
 
         <nav style={s.nav}>
           {navItems.map(n => (
@@ -50,7 +51,7 @@ const s = {
   topbar:      { display:'flex', alignItems:'center', gap:'8px',
                  background:'#1a1a2e', padding:'0 24px', height:'56px', flexShrink:0,
                  borderBottom:'1px solid #2a2a4e' },
-  brandText:   { fontSize:'17px', fontWeight:800, color:'#fff', marginRight:'16px', whiteSpace:'nowrap' },
+  logo:        { height:'36px', marginRight:'16px', objectFit:'contain' },
 
   nav:         { display:'flex', alignItems:'center', gap:'4px', flex:1 },
   link:        { display:'flex', alignItems:'center', gap:'7px', padding:'7px 12px',
