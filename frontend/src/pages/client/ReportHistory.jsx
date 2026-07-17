@@ -71,8 +71,8 @@ export default function ReportHistory() {
                     </span>
                   </td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, ...(row.ACTION === 'preview' ? s.previewBadge : s.downloadBadge) }}>
-                      {row.ACTION === 'preview' ? '👁 Preview' : '⬇ Download'}
+                    <span style={{ ...s.badge, ...(row.ACTION === 'GENERATE' ? s.generateBadge : s.printBadge) }}>
+                      {row.ACTION === 'GENERATE' ? '👁 Generate' : '🖨 Print'}
                     </span>
                   </td>
                   <td style={{ ...s.td, ...s.tdDate }}>{formatDateTime(row.CREATED_AT)}</td>
@@ -110,10 +110,11 @@ const s = {
   td:           { padding: '11px 16px', color: '#333', verticalAlign: 'middle',textAlign: 'left', fontSize: '13px' },
   tdNum:        { color: '#aaa', width: '48px', textAlign: 'center' },
   tdDate:       { whiteSpace: 'nowrap', color: '#555' },
+  tdIp:         { whiteSpace: 'nowrap', color: '#888', fontSize: '12px' },
   rowEven:      { background: '#fff' },
   rowOdd:       { background: '#f9f9fb' },
   badge:        { display: 'inline-block', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700 },
-  previewBadge: { background: '#e8f5e9', color: '#2e7d32' },
-  downloadBadge:{ background: '#e3f2fd', color: '#1565c0' },
+  generateBadge:{ background: '#e8f5e9', color: '#2e7d32' },
+  printBadge:   { background: '#e3f2fd', color: '#1565c0' },
   fmtColor:     (fmt) => FORMAT_COLORS[(fmt || '').toLowerCase()] || { background: '#f0f0f0', color: '#555' },
 };

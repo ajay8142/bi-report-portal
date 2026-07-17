@@ -14,7 +14,10 @@ router.post('/clients',                          ctrl.createClient);
 router.put('/clients/:id',                       ctrl.updateClient);
 router.delete('/clients/:id',                    ctrl.deleteClient);
 router.get('/assignments/:clientId',             ctrl.getAssignments);
+router.get('/history/:clientId',                 ctrl.getClientHistory);
+router.get('/roles/:clientId',                   ctrl.getUserRoles);
 router.post('/assignments',                      ctrl.toggleAssignment);
+router.put('/assignments/flag',                  ctrl.setAssignmentFlag);
 router.put('/assignments/:clientId/disable-all', ctrl.disableAllAssignments);
 
 // Branch access

@@ -115,6 +115,16 @@ async function getReportsByModule(moduleAbsolutePath) {
   return items;
 }
 
+// Reports are stored in the BIP catalog as a folder (e.g. "/Generic Reports/CASA/Dormant Accounts")
+// containing the actual .xdo report object plus its layouts/data model. The .xdo file name doesn't
+// reliably match the folder name, so instead of guessing it, ask BIP what's actually in the folder.
+async function resolveReportObjectPath(reportFolderPath) {
+  const items = await getFolderContents(reportFolderPath);
+  const match = items.find(i => i.absolutePath.toLowerCase().endsWith('.xdo'));
+  if (!match) throw new Error(`No report object (.xdo) found under ${reportFolderPath}`);
+  return match.absolutePath;
+}
+
 // ============================================================
 //  2.  getReportParameters  (WSDL-1 – ReportService)
 // ============================================================
@@ -406,7 +416,7 @@ async function getReportDefinition(reportAbsolutePath) {
 }
 
 module.exports = {
-  getModules, getReportsByModule, getFolderContents,
+  getModules, getReportsByModule, getFolderContents, resolveReportObjectPath,
   getReportParameters, runReport, getReportDefinition,
   FORMAT_MIME, FORMAT_EXT, SUPPORTED_FORMATS: Object.keys(FORMAT_MIME),
 };

@@ -9,6 +9,7 @@ export default function AssignReports() {
   const [activeModule, setActiveModule] = useState(null);
   const [reports,      setReports]      = useState([]);
   const [assignments,  setAssignments]  = useState({});
+  const [roles,        setRoles]        = useState([]);
   const [loading,      setLoading]      = useState(false);
 
   useEffect(() => {
@@ -21,15 +22,24 @@ export default function AssignReports() {
     setReports([]);
     setLoading(true);
     try {
-      const [modRes, assignRes] = await Promise.all([
+      const [modRes, assignRes, roleRes] = await Promise.all([
         api.get('/admin/modules'),
         api.get(`/admin/assignments/${client.USER_ID}`),
+        api.get(`/admin/roles/${client.USER_ID}`),
       ]);
       setModules(modRes.data.data);
-      // Build assignment map: reportPath -> isEnabled
+      // Build assignment map: reportPath -> { isEnabled, userRole, printFlag, generateFlag }
       const map = {};
-      assignRes.data.data.forEach(a => { map[a.REPORT_PATH] = a.IS_ENABLED === 1; });
+      assignRes.data.data.forEach(a => {
+        map[a.REPORT_PATH] = {
+          isEnabled:    a.IS_ENABLED === 1,
+          userRole:     a.USER_ROLE || '',
+          printFlag:    a.PRINT_FLAG === 'Y',
+          generateFlag: a.GENERATE_FLAG === 'Y',
+        };
+      });
       setAssignments(map);
+      setRoles(roleRes.data.data);
     } catch { toast.error('Failed to load data'); }
     finally  { setLoading(false); }
   };
@@ -45,6 +55,8 @@ export default function AssignReports() {
   };
 
   const toggle = async (report, enabled) => {
+    const userRole = assignments[report.absolutePath]?.userRole || '';
+    if (enabled && !userRole) return toast.error('Select a role for this report first');
     try {
       await api.post('/admin/assignments', {
         clientId:   selectedClient.USER_ID,
@@ -53,17 +65,39 @@ export default function AssignReports() {
         reportName: report.displayName,
         reportPath: report.absolutePath,
         isEnabled:  enabled,
+        userRole,
       });
-      setAssignments(prev => ({ ...prev, [report.absolutePath]: enabled }));
+      setAssignments(prev => ({ ...prev, [report.absolutePath]: { ...prev[report.absolutePath], isEnabled: enabled, userRole } }));
       toast.success(enabled ? 'Report enabled' : 'Report disabled');
-    } catch { toast.error('Toggle failed'); }
+    } catch (err) { toast.error(err.response?.data?.message || 'Toggle failed'); }
+  };
+
+  const changeRole = (report, userRole) => {
+    setAssignments(prev => ({ ...prev, [report.absolutePath]: { ...prev[report.absolutePath], userRole } }));
+  };
+
+  const toggleFlag = async (report, flag, value) => {
+    const key = flag === 'PRINT' ? 'printFlag' : 'generateFlag';
+    try {
+      await api.put('/admin/assignments/flag', {
+        clientId:   selectedClient.USER_ID,
+        moduleName: activeModule.displayName,
+        modulePath: activeModule.absolutePath,
+        reportName: report.displayName,
+        reportPath: report.absolutePath,
+        flag,
+        value,
+      });
+      setAssignments(prev => ({ ...prev, [report.absolutePath]: { ...prev[report.absolutePath], [key]: value } }));
+      toast.success(`${flag === 'PRINT' ? 'Print' : 'Generate'} ${value ? 'enabled' : 'disabled'}`);
+    } catch (err) { toast.error(err.response?.data?.message || 'Toggle failed'); }
   };
 
   const disableAll = async () => {
     if (!window.confirm('Disable ALL reports for this client?')) return;
     try {
       await api.put(`/admin/assignments/${selectedClient.USER_ID}/disable-all`);
-      setAssignments(prev => Object.fromEntries(Object.keys(prev).map(k => [k, false])));
+      setAssignments(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, isEnabled: false }])));
       toast.success('All reports disabled');
     } catch { toast.error('Failed'); }
   };
@@ -139,12 +173,11 @@ export default function AssignReports() {
                   <tr>
                     <th style={{ ...s.th, ...s.thNum }}>S No.</th>
                     <th style={{ ...s.th }}>Module Name</th>
-                    <th style={{ ...s.th }}>Path</th>
                   </tr>
                 </thead>
                 <tbody>
                   {modules.length === 0 ? (
-                    <tr><td colSpan={3} style={s.empty}>No modules found</td></tr>
+                    <tr><td colSpan={2} style={s.empty}>No modules found</td></tr>
                   ) : modules.map((mod, i) => (
                     <tr
                       key={mod.absolutePath}
@@ -155,7 +188,6 @@ export default function AssignReports() {
                     >
                       <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                       <td style={s.td}>📂 {mod.displayName}</td>
-                      <td style={{ ...s.td, color:'#888', fontSize:'12px' }}>{mod.absolutePath}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -171,20 +203,55 @@ export default function AssignReports() {
                   <tr>
                     <th style={{ ...s.th, ...s.thNum }}>S No.</th>
                     <th style={{ ...s.th }}>Report Name</th>
-                    <th style={{ ...s.th}}>Path</th>
+                    <th style={{ ...s.th}}>Role</th>
+                    <th style={{ ...s.th, textAlign:'center' }}>Print</th>
+                    <th style={{ ...s.th, textAlign:'center' }}>Generate</th>
                     <th style={{ ...s.th}}>Assigned</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reports.length === 0
-                    ? <tr><td colSpan={4} style={s.empty}>No reports in this module</td></tr>
+                    ? <tr><td colSpan={6} style={s.empty}>No reports in this module</td></tr>
                     : reports.map((r, i) => {
-                        const enabled = !!assignments[r.absolutePath];
+                        const entry        = assignments[r.absolutePath] || {};
+                        const enabled      = !!entry.isEnabled;
+                        const role         = entry.userRole || '';
+                        const printFlag    = !!entry.printFlag;
+                        const generateFlag = !!entry.generateFlag;
                         return (
                           <tr key={r.absolutePath} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                             <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                             <td style={s.td}>📄 {r.displayName}</td>
-                            <td style={{ ...s.td, color:'#aaa', fontSize:'12px' }}>{r.absolutePath}</td>
+                            <td style={s.td}>
+                              <select
+                                style={s.roleSelect}
+                                value={role}
+                                onChange={e => changeRole(r, e.target.value)}
+                              >
+                                <option value="">Select role…</option>
+                                {roles.map(roleId => (
+                                  <option key={roleId} value={roleId}>{roleId}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td style={{ ...s.td, textAlign:'center' }}>
+                              <label style={s.toggleWrap}>
+                                <input type="checkbox" style={{ display:'none' }} checked={printFlag}
+                                  onChange={e => toggleFlag(r, 'PRINT', e.target.checked)} />
+                                <span style={{ ...s.toggleTrack, background: printFlag ? '#1976d2' : '#ccc' }}>
+                                  <span style={{ ...s.toggleThumb, left: printFlag ? '20px' : '2px' }} />
+                                </span>
+                              </label>
+                            </td>
+                            <td style={{ ...s.td, textAlign:'center' }}>
+                              <label style={s.toggleWrap}>
+                                <input type="checkbox" style={{ display:'none' }} checked={generateFlag}
+                                  onChange={e => toggleFlag(r, 'GENERATE', e.target.checked)} />
+                                <span style={{ ...s.toggleTrack, background: generateFlag ? '#1976d2' : '#ccc' }}>
+                                  <span style={{ ...s.toggleThumb, left: generateFlag ? '20px' : '2px' }} />
+                                </span>
+                              </label>
+                            </td>
                             <td style={{ ...s.td, textAlign:'center' }}>
                               <label style={s.toggleWrap}>
                                 <input type="checkbox" style={{ display:'none' }} checked={enabled}
@@ -230,6 +297,7 @@ const s = {
   rowEven:      { background:'#fff' },
   rowOdd:       { background:'#f9fafb' },
   empty:        { padding:'24px', textAlign:'center', color:'#aaa' },
+  roleSelect:   { padding:'6px 10px', border:'1px solid #ddd', borderRadius:'6px', fontSize:'13px', minWidth:'120px' },
   toggleWrap:   { cursor:'pointer', display:'inline-block' },
   toggleTrack:  { display:'inline-block', width:'44px', height:'24px', borderRadius:'12px', position:'relative', transition:'background 0.2s' },
   toggleThumb:  { position:'absolute', top:'2px', width:'20px', height:'20px', borderRadius:'50%', background:'#fff', boxShadow:'0 1px 4px rgba(0,0,0,0.2)', transition:'left 0.2s' },

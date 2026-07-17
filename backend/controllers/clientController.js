@@ -1,63 +1,107 @@
-const oracledb = require('oracledb');
 const db  = require('../config/db');
 const bip = require('../services/bipSoapService');
 
-async function applyAccessFilter(userId, params) {
+// Extracts the client's IP, unwrapping the IPv6-mapped IPv4 prefix (::ffff:) Node adds
+// when a client connects over IPv4.
+function getClientIp(req) {
+  const ip = req.ip || req.socket?.remoteAddress || '';
+  return ip.replace(/^::ffff:/, '');
+}
+
+const IP_RE = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]+$/;
+
+// req.ip resolves to a loopback/private address (::1, 127.0.0.1) when the server is behind
+// NAT or accessed via localhost, so prefer the public IP the frontend looked up client-side.
+function resolveClientIp(req, reportedIp) {
+  if (reportedIp && IP_RE.test(reportedIp)) return reportedIp;
+  const fallback = getClientIp(req);
+  console.warn(`IP lookup: frontend reported no usable IP (got "${reportedIp}"), using server-side fallback "${fallback}"`);
+  return fallback;
+}
+
+// Report parameters that must be restricted to the values a user is
+// authorized for in the core banking (FCUBS) tables, keyed by USER_NAME.
+// BRANCH is resolved via the FCUBS restriction package (role-aware); the rest
+// read straight off the SMTB access tables.
+const CORE_BANKING_FILTERS = [
+  { test: label => label.includes('BRANCH'), fn: 'PKG_USER_REPORT_RESTRICTION.GET_ALLOWED_BRANCHES' },
+  // PRODUCT_CODE is also scoped by the report's PM_MODULE parameter.
+  { test: label => label.includes('PRODUCT'), fn: 'PKG_USER_REPORT_RESTRICTION.GET_ALLOWED_PRODUCT_CODE', needsModule: true },
+  { test: label => label.includes('ACCOUNT') && label.includes('CLASS'), fn: 'PKG_USER_REPORT_RESTRICTION.GET_ALLOWED_ACCOUNT_CLASSES' },
+  { test: label => label.includes('GL') && label.includes('CODE'), fn: 'PKG_USER_REPORT_RESTRICTION.GET_ALLOWED_GLS' },
+];
+
+async function applyCoreBankingFilter(userId, userRole, params) {
   try {
-    const result = await db.execute(
-      `SELECT ACCESS_LIST FROM REPORT_ACCESS_CONTROL WHERE USER_ID = TO_CHAR(:userId)`,
-      { userId },
-      { fetchInfo: { ACCESS_LIST: { type: oracledb.STRING } } }
-    );
-    if (!result.rows.length) return params;
+    const userResult = await db.execute(`SELECT USER_NAME FROM USERS WHERE USER_ID = :userId`, { userId });
+    const userName = userResult.rows[0]?.USER_NAME;
+    if (!userName) return params;
 
-    const raw = result.rows[0].ACCESS_LIST;
-    const accessList = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const moduleParam = params.find(p => (p.name || '').toUpperCase() === 'PM_MODULE');
+    const moduleValue = moduleParam?.values?.[0] ?? moduleParam?.defaultValue ?? null;
 
-    return params.map(param => {
-      // Match by parameter display label (case-insensitive) against access control keys
-      const paramLabel = (param.label || param.name).toUpperCase();
-      const matchedKey = Object.keys(accessList).find(k => k.toUpperCase() === paramLabel);
+    const allowedCache = {};
+    const result = [];
 
-      if (!matchedKey) return param;
+    for (const param of params) {
+      const label   = (param.label || param.name || '').toUpperCase();
+      const matcher = CORE_BANKING_FILTERS.find(m => m.test(label));
+      if (!matcher) { result.push(param); continue; }
 
-      const allowed = accessList[matchedKey];
-      if (!allowed.length) return param;
+      const cacheKey = (matcher.fn || matcher.table) + (matcher.needsModule ? `:${moduleValue || ''}` : '');
+      if (!allowedCache[cacheKey]) {
+        const bindParams = { userName, userRole: userRole || null };
+        let fnArgs = ':userName, :userRole';
+        if (matcher.needsModule) {
+          bindParams.pmModule = moduleValue;
+          fnArgs += ', :pmModule';
+        }
+        const rows = matcher.fn
+          ? await db.execute(
+              `SELECT COLUMN_VALUE AS VAL FROM TABLE(${matcher.fn}(${fnArgs}))`,
+              bindParams
+            )
+          : await db.execute(
+              `SELECT DISTINCT ${matcher.column} AS VAL FROM ${matcher.table} WHERE USER_ID = :userName ${matcher.where}`,
+              { userName }
+            );
+        allowedCache[cacheKey] = new Set(rows.rows.map(r => String(r.VAL).toUpperCase()));
+      }
 
-      const allowedSet = new Set(allowed.map(v => String(v).toUpperCase()));
-      const lovValues  = param.values   || [];
-      const lovLabels  = param.lovLabels || [];
+      const allowedSet = allowedCache[cacheKey];
+      if (!allowedSet.size) { result.push(param); continue; }
 
-      const kept = lovValues
-        .map((v, i) => ({ v, label: lovLabels[i] ?? v }))
-        .filter(({ v }) => allowedSet.has(String(v).toUpperCase()));
+      const lovValues = param.values    || [];
+      const lovLabels = param.lovLabels || [];
 
-      return {
+      // GL_CODE (and any other restricted param) may not come from BIP as an LOV at all —
+      // in that case build the dropdown entirely from the restriction package's allowed values.
+      const kept = lovValues.length
+        ? lovValues
+            .map((v, i) => ({ v, label: lovLabels[i] ?? v }))
+            .filter(({ v }) => allowedSet.has(String(v).toUpperCase()))
+        : [...allowedSet].sort().map(v => ({ v, label: v }));
+
+      result.push({
         ...param,
-        values:    kept.map(x => x.v),
+        UIType: kept.length ? 'menu' : param.UIType,
+        values: kept.map(x => x.v),
         lovLabels: kept.map(x => x.label),
-      };
-    });
+      });
+    }
+    return result;
   } catch (err) {
-    console.error('Access filter error:', err.message);
+    console.error('Core banking access filter error:', err.message);
     return params;
   }
 }
 
-// --- Helper to format Oracle .xdo paths ---
-// Converts: "/Generic Reports/CASA/Dormant Accounts"
-// To:       "/Generic Reports/CASA/Dormant Accounts/Dormant_Accounts.xdo"
-function formatOraclePath(basePath) {
+// --- Resolve a report's .xdo object path ---
+// REPORT_PATH is stored as the catalog folder, e.g. "/Generic Reports/CASA/Dormant Accounts".
+// Ask BIP what the actual report object inside that folder is instead of guessing the file name.
+async function resolveOraclePath(basePath) {
   if (basePath.endsWith('.xdo')) return basePath;
-  
-  // Extract the last folder name (e.g., "Dormant Accounts")
-  const parts = basePath.split('/');
-  const folderName = parts[parts.length - 1];
-  
-  // Replace spaces with underscores for the file name (e.g., "Dormant_Accounts")
-  const fileName = folderName.replace(/ /g, '_');
-  
-  return `${basePath}/${fileName}.xdo`;
+  return bip.resolveReportObjectPath(basePath);
 }
 
 exports.getProfile = async (req, res) => {
@@ -89,14 +133,20 @@ exports.getReports = async (req, res) => {
   if (!path) return res.status(400).json({ success: false, message: 'path is required' });
 
   const dbResult = await db.execute(
-    `SELECT REPORT_PATH FROM REPORT_ASSIGNMENTS
+    `SELECT REPORT_PATH, PRINT_FLAG, GENERATE_FLAG FROM REPORT_ASSIGNMENTS
      WHERE USER_ID = :userId AND MODULE_PATH = :modulePath AND IS_ENABLED = 1`,
     { userId, modulePath: path }
   );
-  const assigned = new Set(dbResult.rows.map(r => r.REPORT_PATH));
-  if (!assigned.size) return res.json({ success: true, data: [] });
+  const assignedMap = new Map(dbResult.rows.map(r => [
+    r.REPORT_PATH,
+    { printFlag: r.PRINT_FLAG === 'Y', generateFlag: r.GENERATE_FLAG === 'Y' },
+  ]));
+  if (!assignedMap.size) return res.json({ success: true, data: [] });
   const allReports = await bip.getReportsByModule(path);
-  res.json({ success: true, data: allReports.filter(r => assigned.has(r.absolutePath)) });
+  const data = allReports
+    .filter(r => assignedMap.has(r.absolutePath))
+    .map(r => ({ ...r, ...assignedMap.get(r.absolutePath) }));
+  res.json({ success: true, data });
 };
 
 exports.getParameters = async (req, res) => {
@@ -106,7 +156,7 @@ exports.getParameters = async (req, res) => {
   if (!rawPath) return res.status(400).json({ success: false, message: 'report path is required' });
 
   const check = await db.execute(
-    `SELECT ASSIGNMENT_ID FROM REPORT_ASSIGNMENTS
+    `SELECT ASSIGNMENT_ID, USER_ROLE FROM REPORT_ASSIGNMENTS
      WHERE USER_ID = :userId AND REPORT_PATH = :reportPath AND IS_ENABLED = 1`,
     { userId, reportPath: rawPath }
   );
@@ -114,11 +164,10 @@ exports.getParameters = async (req, res) => {
   if (!check.rows.length)
     return res.status(403).json({ success: false, message: 'Access denied to this report' });
 
-  const oraclePath = formatOraclePath(rawPath);
-
   try {
+    const oraclePath = await resolveOraclePath(rawPath);
     const params   = await bip.getReportParameters(oraclePath);
-    const filtered = await applyAccessFilter(userId, params);
+    const filtered = await applyCoreBankingFilter(userId, check.rows[0].USER_ROLE, params);
     res.json({ success: true, data: filtered });
   } catch (err) {
     console.error("🚨 Parameter Fetch Error:", err.message);
@@ -135,7 +184,7 @@ exports.refreshParameters = async (req, res) => {
   if (!rawPath) return res.status(400).json({ success: false, message: 'path is required' });
 
   const check = await db.execute(
-    `SELECT ASSIGNMENT_ID FROM REPORT_ASSIGNMENTS
+    `SELECT ASSIGNMENT_ID, USER_ROLE FROM REPORT_ASSIGNMENTS
      WHERE USER_ID = :userId AND REPORT_PATH = :reportPath AND IS_ENABLED = 1`,
     { userId, reportPath: rawPath }
   );
@@ -143,11 +192,10 @@ exports.refreshParameters = async (req, res) => {
   if (!check.rows.length)
     return res.status(403).json({ success: false, message: 'Access denied to this report' });
 
-  const oraclePath = formatOraclePath(rawPath);
-
   try {
+    const oraclePath = await resolveOraclePath(rawPath);
     const params   = await bip.getReportParameters(oraclePath, currentParams);
-    const filtered = await applyAccessFilter(userId, params);
+    const filtered = await applyCoreBankingFilter(userId, check.rows[0].USER_ROLE, params);
     res.json({ success: true, data: filtered });
   } catch (err) {
     console.error("🚨 Parameter Refresh Error:", err.message);
@@ -156,7 +204,7 @@ exports.refreshParameters = async (req, res) => {
 };
 
 exports.runReport = async (req, res) => {
-  const { reportPath, format, params, templateId, locale, timezone, action } = req.body;
+  const { reportPath, format, params, templateId, locale, timezone, action, clientIp } = req.body;
   const userId = req.user.userId;
   
   if (!reportPath || !format)
@@ -167,32 +215,53 @@ exports.runReport = async (req, res) => {
 
   // 1. Check DB using the exact path
   const check = await db.execute(
-    `SELECT ASSIGNMENT_ID FROM REPORT_ASSIGNMENTS
+    `SELECT ASSIGNMENT_ID, USER_ROLE FROM REPORT_ASSIGNMENTS
      WHERE USER_ID = :userId AND REPORT_PATH = :reportPath AND IS_ENABLED = 1`,
     { userId, reportPath }
   );
-  
+
   if (!check.rows.length)
     return res.status(403).json({ success: false, message: 'Access denied to this report' });
 
-  // 2. Reformat the path for Oracle SOAP Service
-  const oraclePath = formatOraclePath(reportPath);
-  console.log(oraclePath);
+  const userRole = check.rows[0].USER_ROLE;
 
   try {
+    // 2. Resolve the actual .xdo report object for the Oracle SOAP Service
+    const oraclePath = await resolveOraclePath(reportPath);
+
+    const userResult = await db.execute(`SELECT USER_NAME FROM USERS WHERE USER_ID = :userId`, { userId });
+    const userName = userResult.rows[0]?.USER_NAME;
+
+    let finalParams = params || [];
+    if (userName) {
+      const idx = finalParams.findIndex(p => (p.name || '').toUpperCase() === 'PM_USER_ID');
+      const pmUserIdParam = { name: 'PM_USER_ID', dataType: 'string', values: [userName] };
+      finalParams = idx >= 0
+        ? finalParams.map((p, i) => i === idx ? { ...p, values: [userName] } : p)
+        : [...finalParams, pmUserIdParam];
+    }
+    if (userRole) {
+      const roleIdx = finalParams.findIndex(p => (p.name || '').toUpperCase() === 'PM_ROLE_ID');
+      const pmRoleIdParam = { name: 'PM_ROLE_ID', dataType: 'string', values: [userRole] };
+      finalParams = roleIdx >= 0
+        ? finalParams.map((p, i) => i === roleIdx ? { ...p, values: [userRole] } : p)
+        : [...finalParams, pmRoleIdParam];
+    }
+
     const result = await bip.runReport({
       reportAbsolutePath: oraclePath,
-      format, params: params || [],
+      format, params: finalParams,
       templateId: templateId || '',
       locale: locale || 'en-US',
       timezone: timezone || 'Asia/Calcutta',
     });
 
     const reportName = reportPath.split('/').pop(); // Use the clean path name for the report name
+    const auditAction = action === 'preview' ? 'GENERATE' : 'PRINT';
     await db.execute(
-      `INSERT INTO AUDIT_LOGS (USER_ID, REPORT_NAME, ACTION, FORMAT)
-       VALUES (:userId, :reportName, :action, :format)`,
-      { userId, reportName, action: action || 'download', format: format.toUpperCase() }
+      `INSERT INTO AUDIT_LOGS (USER_ID, REPORT_NAME, ACTION, FORMAT, IP_ADDRESS)
+       VALUES (:userId, :reportName, :action, :format, :ipAddress)`,
+      { userId, reportName, action: auditAction, format: format.toUpperCase(), ipAddress: resolveClientIp(req, clientIp) }
     );
 
     const disposition = action === 'preview' ? 'inline' : 'attachment';
@@ -210,9 +279,10 @@ exports.runReport = async (req, res) => {
 
 exports.getHistory = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const userId = req.user.userId;
     const result = await db.execute(
-      `SELECT LOG_ID, REPORT_NAME, ACTION, FORMAT, CREATED_AT
+      `SELECT LOG_ID, REPORT_NAME, ACTION, FORMAT, IP_ADDRESS, CREATED_AT
        FROM AUDIT_LOGS
        WHERE USER_ID = :userId
        ORDER BY CREATED_AT DESC
@@ -220,11 +290,14 @@ exports.getHistory = async (req, res) => {
       { userId }
     );
 
+    console.log(`AUDIT_LOGS: user ${userId} -> ${result.rows.length} rows, LOG_IDs: ${result.rows.map(r => r.LOG_ID).join(',')}`);
+
     const history = result.rows.map(row => ({
       LOG_ID:      row.LOG_ID,
       REPORT_NAME: row.REPORT_NAME,
       ACTION:      row.ACTION,
       FORMAT:      row.FORMAT,
+      IP_ADDRESS:  row.IP_ADDRESS,
       CREATED_AT:  row.CREATED_AT,
     }));
 

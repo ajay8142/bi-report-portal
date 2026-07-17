@@ -10,7 +10,32 @@ import {
   Checkbox,
   ListItemText,
   OutlinedInput,
+  Autocomplete,
 } from '@mui/material';
+
+// Looks up the browser's actual public IP (server-side req.ip is unreliable behind
+// NAT/proxies). Tries a couple of providers with a short timeout so a slow/blocked
+// lookup never hangs report generation — falls back to the server's own detection.
+async function fetchPublicIp() {
+  const providers = [
+    { url: 'https://api.ipify.org?format=json',       pick: (d) => d.ip },
+    { url: 'https://api64.ipify.org?format=json',      pick: (d) => d.ip },
+  ];
+  for (const { url, pick } of providers) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`${url} responded ${res.status}`);
+      const ip = pick(await res.json());
+      if (ip) return ip;
+    } catch (err) {
+      console.warn('Public IP lookup failed:', err.message);
+    }
+  }
+  return '';
+}
 
 function toHTMLDateValue(value) {
   if (!value) return '';
@@ -24,6 +49,7 @@ function ParamField({ param, value, onChange }) {
 
   const isLov = (UIType === 'menu' || UIType === 'check' || UIType === 'radio') && lovLabels?.length > 0;
   const isDate = dataType === 'date' || UIType === 'date';
+  const isGlCode = (name || '').toUpperCase().replace(/[\s_]/g, '').includes('GLCODE');
 
   let indicator = '';
   if (mandatory) {
@@ -32,6 +58,50 @@ function ParamField({ param, value, onChange }) {
     indicator = ' (ALL)';
   }
   const displayLabel = `${label}${indicator}`;
+
+  const labelFor = (val) => {
+    const idx = lovValues.findIndex((v) => v === val);
+    return idx >= 0 && lovLabels[idx] ? lovLabels[idx] : val;
+  };
+
+  if (isLov && isGlCode && multiValuesAllowed) {
+    const safeValue = (Array.isArray(value) ? value : (value ? [value] : [])).filter(v => v !== '*');
+    return (
+      <Autocomplete
+        multiple
+        fullWidth
+        disableCloseOnSelect
+        options={lovValues}
+        getOptionLabel={labelFor}
+        value={safeValue}
+        onChange={(e, newValue) => onChange(name, newValue.length ? newValue : ['*'])}
+        renderOption={(props, option) => (
+          <li {...props} key={option}>
+            <Checkbox checked={safeValue.indexOf(option) > -1} />
+            <ListItemText primary={labelFor(option)} />
+          </li>
+        )}
+        renderInput={(params) => (
+          <TextField {...params} label={displayLabel} InputLabelProps={{ shrink: true }} placeholder="Search GL code..." />
+        )}
+      />
+    );
+  }
+
+  if (isLov && isGlCode && !multiValuesAllowed) {
+    return (
+      <Autocomplete
+        fullWidth
+        options={lovValues}
+        getOptionLabel={labelFor}
+        value={value || null}
+        onChange={(e, newValue) => onChange(name, newValue || '')}
+        renderInput={(params) => (
+          <TextField {...params} label={displayLabel} InputLabelProps={{ shrink: true }} placeholder="Search GL code..." />
+        )}
+      />
+    );
+  }
 
   if (isLov && multiValuesAllowed) {
     const safeValue = Array.isArray(value) ? value : (value ? [value] : []);
@@ -141,6 +211,10 @@ function ParamField({ param, value, onChange }) {
 
 const FORMATS = ['pdf', 'xlsx', 'html', 'csv', 'rtf', 'xml'];
 
+// Internal/system parameters that should never be shown as input fields —
+// they're still submitted with their default/current value when the report runs.
+const HIDDEN_PARAMS = ['PM_USER_ID', 'PM_ROLE_ID', 'PM_MODULE'];
+
 export default function GenerateReport() {
   const [modules,      setModules]      = useState([]);
   const [activeModule, setActiveModule] = useState(null);
@@ -149,7 +223,7 @@ export default function GenerateReport() {
   const [params,       setParams]       = useState([]);
   const [paramValues,  setParamValues]  = useState({});
   const [format,       setFormat]       = useState('pdf');
-  const [action,       setAction]       = useState('preview');
+  const [action,       setAction]       = useState('');
   const [loading,      setLoading]      = useState(false);
   const [running,      setRunning]      = useState(false);
 
@@ -178,6 +252,7 @@ export default function GenerateReport() {
     setActiveReport(report);
     setParams([]);
     setParamValues({});
+    setAction(report.generateFlag ? 'preview' : report.printFlag ? 'download' : '');
     setLoading(true);
     try {
       const res = await api.get('/client/reports/parameters', { params: { path: report.absolutePath } });
@@ -224,11 +299,16 @@ export default function GenerateReport() {
         })(),
       }));
 
+      // req.ip resolves to the loopback address (::1) when the app is accessed over
+      // localhost/NAT, so ask a public IP lookup service for the client's real IP.
+      const clientIp = await fetchPublicIp();
+
       const res = await api.post('/client/reports/run', {
         reportPath: activeReport.absolutePath,
         format,
         params: paramPayload,
         action,
+        clientIp,
       }, { responseType: 'blob' });
 
       const blob     = new Blob([res.data], { type: res.headers['content-type'] });
@@ -236,7 +316,9 @@ export default function GenerateReport() {
       const filename = activeReport.displayName + '.' + format;
 
       if (action === 'preview') {
-        window.open(url, '_blank');
+        // #toolbar=0 hides the browser's built-in PDF viewer toolbar (print/download/etc.)
+        const viewerUrl = format === 'pdf' ? `${url}#toolbar=0` : url;
+        window.open(viewerUrl, '_blank');
       } else {
         const a    = document.createElement('a');
         a.href     = url;
@@ -290,12 +372,11 @@ export default function GenerateReport() {
               <tr>
                 <th style={{ ...s.th, ...s.thNum }}>S No.</th>
                 <th style={s.th}>Module Name</th>
-                <th style={s.th}>Path</th>
               </tr>
             </thead>
             <tbody>
               {modules.length === 0 ? (
-                <tr><td colSpan={3} style={s.empty}>No modules assigned to you.</td></tr>
+                <tr><td colSpan={2} style={s.empty}>No modules assigned to you.</td></tr>
               ) : modules.map((mod, i) => (
                 <tr
                   key={mod.absolutePath}
@@ -306,7 +387,6 @@ export default function GenerateReport() {
                 >
                   <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                   <td style={s.td}>📂 {mod.displayName}</td>
-                  <td style={{ ...s.td, color: '#888', fontSize: '12px' }}>{mod.absolutePath}</td>
                 </tr>
               ))}
             </tbody>
@@ -322,12 +402,11 @@ export default function GenerateReport() {
               <tr>
                 <th style={{ ...s.th, ...s.thNum }}>S No.</th>
                 <th style={s.th}>Report Name</th>
-                <th style={s.th}>Path</th>
               </tr>
             </thead>
             <tbody>
               {reports.length === 0 ? (
-                <tr><td colSpan={3} style={s.empty}>No reports assigned in this module.</td></tr>
+                <tr><td colSpan={2} style={s.empty}>No reports assigned in this module.</td></tr>
               ) : reports.map((r, i) => (
                 <tr
                   key={r.absolutePath}
@@ -338,7 +417,6 @@ export default function GenerateReport() {
                 >
                   <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                   <td style={s.td}>📄 {r.displayName}</td>
-                  <td style={{ ...s.td, color: '#aaa', fontSize: '12px' }}>{r.absolutePath}</td>
                 </tr>
               ))}
             </tbody>
@@ -352,17 +430,20 @@ export default function GenerateReport() {
           {/* Parameters Panel */}
           <div style={s.panel}>
             <h3 style={s.panelTitle}>Parameters</h3>
-            {params.length === 0 ? (
-              <p style={s.empty}>This report has no parameters.</p>
-            ) : (
-              <div style={s.paramGrid}>
-                {params.map(p => (
-                  <div key={p.name} style={s.paramCell}>
-                    <ParamField param={p} value={paramValues[p.name]} onChange={handleParamChange} />
-                  </div>
-                ))}
-              </div>
-            )}
+            {(() => {
+              const visibleParams = params.filter(p => !HIDDEN_PARAMS.includes((p.name || '').toUpperCase()));
+              return visibleParams.length === 0 ? (
+                <p style={s.empty}>This report has no parameters.</p>
+              ) : (
+                <div style={s.paramGrid}>
+                  {visibleParams.map(p => (
+                    <div key={p.name} style={s.paramCell}>
+                      <ParamField param={p} value={paramValues[p.name]} onChange={handleParamChange} />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Output Options Panel */}
@@ -381,26 +462,32 @@ export default function GenerateReport() {
                   ))}
                 </select>
               </div>
-              <div style={s.outputField}>
-                <label style={s.label}>Action</label>
-                <select
-                  value={action}
-                  onChange={e => setAction(e.target.value)}
-                  style={s.select}
-                >
-                  <option value="preview">Preview</option>
-                  <option value="download">Download</option>
-                </select>
-              </div>
+              {(activeReport.printFlag || activeReport.generateFlag) && (
+                <div style={s.outputField}>
+                  <label style={s.label}>Action</label>
+                  <select
+                    value={action}
+                    onChange={e => setAction(e.target.value)}
+                    style={s.select}
+                  >
+                    {activeReport.printFlag && <option value="download">🖨 Print</option>}
+                    {activeReport.generateFlag && <option value="preview">👁 Generate</option>}
+                  </select>
+                </div>
+              )}
             </div>
             <div style={s.runWrap}>
-              <button
-                style={{ ...s.runBtn, opacity: running ? 0.7 : 1, cursor: running ? 'not-allowed' : 'pointer' }}
-                onClick={() => runReport(action)}
-                disabled={running}
-              >
-                {running ? 'Running…' : '▶ Run Report'}
-              </button>
+              {activeReport.printFlag || activeReport.generateFlag ? (
+                <button
+                  style={{ ...s.runBtn, opacity: running ? 0.7 : 1, cursor: running ? 'not-allowed' : 'pointer' }}
+                  onClick={() => runReport(action)}
+                  disabled={running}
+                >
+                  {running ? 'Running…' : action === 'download' ? '🖨 Print' : '👁 Generate'}
+                </button>
+              ) : (
+                <p style={s.empty}>No actions available for this report. Contact your administrator.</p>
+              )}
             </div>
           </div>
         </>

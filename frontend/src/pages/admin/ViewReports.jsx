@@ -52,7 +52,6 @@ export default function ViewReports() {
               <tr>
                 <th style={{ ...s.th, ...s.thNum }}>S No.</th>
                 <th style={s.th}>Module Name</th>
-                <th style={s.th}>Path</th>
               </tr>
             </thead>
             <tbody>
@@ -66,7 +65,6 @@ export default function ViewReports() {
                 >
                   <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                   <td style={s.td}>📂 {mod.displayName}</td>
-                  <td style={{ ...s.td, ...s.tdPath }}>{mod.absolutePath}</td>
                 </tr>
               ))}
             </tbody>
@@ -82,17 +80,15 @@ export default function ViewReports() {
               <tr>
                 <th style={{ ...s.th, ...s.thNum }}>S No.</th>
                 <th style={s.th}>Report Name</th>
-                <th style={s.th}>Path</th>
               </tr>
             </thead>
             <tbody>
               {reports.length === 0 ? (
-                <tr><td colSpan={3} style={s.empty}>No reports found in this module</td></tr>
+                <tr><td colSpan={2} style={s.empty}>No reports found in this module</td></tr>
               ) : reports.map((r, i) => (
                 <tr key={r.absolutePath} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                   <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
                   <td style={s.td}>📄 {r.displayName}</td>
-                  <td style={{ ...s.td, ...s.tdPath }}>{r.absolutePath}</td>
                 </tr>
               ))}
             

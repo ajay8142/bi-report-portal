@@ -26,7 +26,7 @@ export default function Clients() {
     setLoading(true);
     try {
       if (editId) {
-        await api.put(`/admin/clients/${editId}`, { name: data.name });
+        await api.put(`/admin/clients/${editId}`, { name: data.name, user_name: data.user_name });
         toast.success('Client updated');
       } else {
         await api.post('/admin/clients', data);
@@ -85,6 +85,11 @@ export default function Clients() {
                 <label style={s.label}>Full Name *</label>
                 <input style={s.input} {...register('name', { required: 'Name is required', minLength: { value: 3, message: 'Min 3 characters' } })} />
                 {errors.name && <span style={s.err}>{errors.name.message}</span>}
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Username *</label>
+                <input style={s.input} {...register('user_name', { required: 'Username is required', minLength: { value: 3, message: 'Min 3 characters' } })} />
+                {errors.user_name && <span style={s.err}>{errors.user_name.message}</span>}
               </div>
               {!editId && (
                 <>
@@ -150,18 +155,19 @@ export default function Clients() {
         <table style={s.table}>
           <thead>
             <tr>
-              {['S No.','Name','Email','Status','Created','Actions'].map(h => (
+              {['S No.','Name','Username','Email','Status','Created','Actions'].map(h => (
                 <th key={h} style={s.th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {clients.length === 0 ? (
-              <tr><td colSpan={6} style={s.empty}>No clients found</td></tr>
+              <tr><td colSpan={7} style={s.empty}>No clients found</td></tr>
             ) : clients.map((c, i) => (
               <tr key={c.USER_ID} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                 <td style={s.td}>{i + 1}</td>
                 <td style={s.td}>{c.NAME}</td>
+                <td style={s.td}>{c.USER_NAME}</td>
                 <td style={s.td}>{c.EMAIL}</td>
                 <td style={s.td}>
                   <span style={{ ...s.badge, background: c.IS_ACTIVE ? '#e8f5e9' : '#fce4ec', color: c.IS_ACTIVE ? '#2e7d32' : '#c62828' }}>
@@ -170,7 +176,7 @@ export default function Clients() {
                 </td>
                 <td style={s.td}>{new Date(c.CREATED_AT).toLocaleDateString()}</td>
                 <td style={s.td}>
-                  <button style={s.actionBtn} onClick={() => { setEditId(c.USER_ID); reset({ name: c.NAME }); setShowForm(true); }}>Edit</button>
+                  <button style={s.actionBtn} onClick={() => { setEditId(c.USER_ID); reset({ name: c.NAME, user_name: c.USER_NAME }); setShowForm(true); }}>Edit</button>
                   <button style={{ ...s.actionBtn, background: '#fff3e0', color: '#e65100' }} onClick={() => handleToggleActive(c)}>
                     {c.IS_ACTIVE ? 'Disable' : 'Enable'}
                   </button>

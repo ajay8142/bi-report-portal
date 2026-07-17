@@ -7,7 +7,7 @@ const navItems = [
   { to: '/admin/view-reports', icon: '📁', label: 'View Reports'   },
   { to: '/admin/clients',      icon: '👥', label: 'Users'          },
   { to: '/admin/assign',       icon: '🔗', label: 'Assign Reports' },
-  { to: '/admin/user-access',  icon: '🔐', label: 'User Access'    },
+  { to: '/admin/logs',         icon: '🕒', label: 'Report Logs'    },
 ];
 
 // ─── Admin Layout ─────────────────────────────────────────────────────────────

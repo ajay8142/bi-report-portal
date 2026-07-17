@@ -10,7 +10,6 @@ const db       = require('./config/db');
 const authRoutes          = require('./routes/authRoutes');
 const adminRoutes         = require('./routes/adminRoutes');
 const clientRoutes        = require('./routes/clientRoutes');
-const accessControlRoutes = require('./routes/accessControlRoutes');
 
 const app = express();
 app.use(helmet());
@@ -21,7 +20,6 @@ app.use(morgan('dev'));
 app.use('/api/auth',                  authRoutes);
 app.use('/api/admin',                 adminRoutes);
 app.use('/api/client',                clientRoutes);
-app.use('/api/admin/access-control',  accessControlRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
