@@ -290,8 +290,6 @@ exports.getHistory = async (req, res) => {
       { userId }
     );
 
-    console.log(`AUDIT_LOGS: user ${userId} -> ${result.rows.length} rows, LOG_IDs: ${result.rows.map(r => r.LOG_ID).join(',')}`);
-
     const history = result.rows.map(row => ({
       LOG_ID:      row.LOG_ID,
       REPORT_NAME: row.REPORT_NAME,

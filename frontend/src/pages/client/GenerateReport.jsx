@@ -184,6 +184,7 @@ function ParamField({ param, value, onChange }) {
           type="date"
           label={displayLabel}
           notched
+          sx={{ colorScheme: 'light' }}
           inputProps={{ max: '9999-12-31' }}
           value={value || ''}
           onChange={(e) => {
