@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useReportEngine } from '../../context/ReportEngineContext';
 
 export default function Clients() {
+  const { engine } = useReportEngine();
   const [clients, setClients]   = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading]   = useState(false);
@@ -13,6 +15,10 @@ export default function Clients() {
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, formState: { errors: pwdErrors } } = useForm();
 
+  // USER_NAME is stored upper-cased in the DB — mirror that live as the admin types
+  // so what's on screen always matches what will actually be saved.
+  const userNameField = register('user_name', { required: 'Username is required', minLength: { value: 3, message: 'Min 3 characters' } });
+
   const fetchClients = async () => {
     try {
       const res = await api.get('/admin/clients');
@@ -20,7 +26,7 @@ export default function Clients() {
     } catch { toast.error('Failed to load clients'); }
   };
 
-  useEffect(() => { fetchClients(); }, []);
+  useEffect(() => { if (engine) Promise.resolve().then(fetchClients); }, [engine]);
 
   const onSubmit = async (data) => {
     setLoading(true);
@@ -88,7 +94,11 @@ export default function Clients() {
               </div>
               <div style={s.field}>
                 <label style={s.label}>Username *</label>
-                <input style={s.input} {...register('user_name', { required: 'Username is required', minLength: { value: 3, message: 'Min 3 characters' } })} />
+                <input
+                  style={s.input}
+                  {...userNameField}
+                  onChange={e => { e.target.value = e.target.value.toUpperCase(); userNameField.onChange(e); }}
+                />
                 {errors.user_name && <span style={s.err}>{errors.user_name.message}</span>}
               </div>
               {!editId && (
@@ -155,20 +165,21 @@ export default function Clients() {
         <table style={s.table}>
           <thead>
             <tr>
-              {['S No.','Name','Username','Email','Status','Created','Actions'].map(h => (
+              {['S No.','Name','Username','Email','Report Server','Status','Created','Actions'].map(h => (
                 <th key={h} style={s.th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {clients.length === 0 ? (
-              <tr><td colSpan={7} style={s.empty}>No clients found</td></tr>
+              <tr><td colSpan={8} style={s.empty}>No clients found</td></tr>
             ) : clients.map((c, i) => (
               <tr key={c.USER_ID} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                 <td style={s.td}>{i + 1}</td>
                 <td style={s.td}>{c.NAME}</td>
                 <td style={s.td}>{c.USER_NAME}</td>
                 <td style={s.td}>{c.EMAIL}</td>
+                <td style={s.td}>{c.REPORT_SERVER}</td>
                 <td style={s.td}>
                   <span style={{ ...s.badge, background: c.IS_ACTIVE ? '#e8f5e9' : '#fce4ec', color: c.IS_ACTIVE ? '#2e7d32' : '#c62828' }}>
                     {c.IS_ACTIVE ? 'Active' : 'Inactive'}

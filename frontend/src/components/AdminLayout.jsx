@@ -1,5 +1,7 @@
-import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ReportEngineProvider, useReportEngine } from '../context/ReportEngineContext';
+import { Outlet, NavLink } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import profinchLogo from '../assets/profinchlogo.png';
 
 const navItems = [
@@ -10,9 +12,34 @@ const navItems = [
   { to: '/admin/logs',         icon: '🕒', label: 'Report Logs'    },
 ];
 
+// value = the REPORT_ENGINE this app's backend understands (see
+// backend/config/reportEngine.js) — "bip" runs everything off real BI
+// Publisher, "reportingtool" runs off the customized files under CHANGED FILES.
+const EDITIONS = [
+  { value: 'bip',           label: 'BIP Enterprise' },
+  { value: 'reportingtool', label: 'BIP Free'        },
+];
+
 // ─── Admin Layout ─────────────────────────────────────────────────────────────
 export default function AdminLayout() {
+  return (
+    <ReportEngineProvider>
+      <AdminLayoutContent />
+    </ReportEngineProvider>
+  );
+}
+
+function AdminLayoutContent() {
   const { user, logout } = useAuth();
+  const { engine, setEngine } = useReportEngine();
+
+  const handleEditionChange = async (e) => {
+    try {
+      await setEngine(e.target.value);
+    } catch {
+      toast.error('Failed to switch edition');
+    }
+  };
 
   return (
     <div style={s.shell}>
@@ -32,6 +59,16 @@ export default function AdminLayout() {
         </nav>
 
         <div style={s.topbarRight}>
+          <select
+            style={s.editionSelect}
+            value={engine || ''}
+            onChange={handleEditionChange}
+            title="BIP Edition"
+          >
+            {EDITIONS.map(ed => (
+              <option key={ed.value} value={ed.value}>{ed.label}</option>
+            ))}
+          </select>
           <span style={s.userName}>{user?.name}</span>
           <button style={s.logoutBtn} onClick={logout}>Logout</button>
         </div>
@@ -60,6 +97,9 @@ const s = {
   linkActive: { background:'#1976d2', color:'#fff' },
 
   topbarRight:{ display:'flex', alignItems:'center', gap:'12px', marginLeft:'auto' },
+
+  editionSelect: { padding:'6px 10px', background:'#22223f', color:'#ccc', border:'1px solid #33335a',
+                borderRadius:'6px', cursor:'pointer', fontWeight:600, fontSize:'13px' },
 
   userName:   { color:'#ccc', fontSize:'13px', fontWeight:600, whiteSpace:'nowrap' },
   logoutBtn:  { padding:'6px 16px', background:'#c62828', color:'#fff', border:'none',

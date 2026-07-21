@@ -4,7 +4,28 @@
 const bcrypt   = require('bcryptjs');
 const oracledb = require('oracledb');
 const db       = require('../config/db');
-const bip      = require('../services/bipSoapService');
+const reportEngine = require('../config/reportEngine');
+
+// Forwards every call to whichever engine (bipSoapService / reportingToolService)
+// is currently selected, so a runtime engine switch takes effect on the next
+// request without needing this module to be re-required.
+const bip = new Proxy({}, { get: (_, prop) => reportEngine.getService()[prop] });
+
+// ── Report Engine (BIP Enterprise / BIP Free) ─────────────────────────────────
+
+exports.getReportEngine = (req, res) => {
+  res.json({ success: true, data: { engine: reportEngine.getEngine() } });
+};
+
+exports.setReportEngine = (req, res) => {
+  const { engine } = req.body;
+  try {
+    reportEngine.setEngine(engine);
+    res.json({ success: true, data: { engine: reportEngine.getEngine() } });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
 
 exports.getDashboard = async (req, res) => {
   const clientResult = await db.execute(
@@ -49,10 +70,15 @@ exports.getReports = async (req, res) => {
   }
 };
 
+// Scoped to whichever edition (BIP Enterprise / BIP Free) is currently
+// selected in the admin top-bar — see config/reportEngine.js. Users,
+// Assign Reports and Report Logs all source their client list from this
+// one endpoint, so filtering here is enough to scope all three.
 exports.getClients = async (req, res) => {
   const result = await db.execute(
-    `SELECT USER_ID, NAME, USER_NAME, EMAIL, IS_ACTIVE, CREATED_AT
-     FROM USERS WHERE ROLE='CLIENT' ORDER BY CREATED_AT DESC`
+    `SELECT USER_ID, NAME, USER_NAME, EMAIL, IS_ACTIVE, CREATED_AT, REPORT_SERVER
+     FROM USERS WHERE ROLE='CLIENT' AND REPORT_SERVER=:reportServer ORDER BY CREATED_AT DESC`,
+    { reportServer: reportEngine.getServerForEngine() }
   );
   res.json({ success: true, data: result.rows });
 };
@@ -66,17 +92,27 @@ exports.createClient = async (req, res) => {
   if (!/^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(password))
     return res.status(400).json({ success: false, message: 'Password: min 8 chars, 1 uppercase, 1 number, 1 special char' });
 
+  const userName = user_name.trim().toUpperCase();
+
+  // The username must be a real core-banking (FCUBS) user — everything this app
+  // does for a client (branch/product access, report restriction filters) is
+  // keyed off SMTB_USER_ROLE/SMTB tables by this same USER_ID.
+  const smtbUser = await db.execute(`SELECT USER_ID FROM SMTB_USER WHERE USER_ID=:userName`, { userName });
+  if (!smtbUser.rows.length)
+    return res.status(400).json({ success: false, message: 'Invalid user: username not found in core banking (SMTB_USER)' });
+
   const dup = await db.execute(`SELECT USER_ID FROM USERS WHERE EMAIL=:email`, { email: email.toLowerCase().trim() });
   if (dup.rows.length) return res.status(409).json({ success: false, message: 'Email already exists' });
 
-  const dupUserName = await db.execute(`SELECT USER_ID FROM USERS WHERE USER_NAME=:userName`, { userName: user_name.trim() });
+  const dupUserName = await db.execute(`SELECT USER_ID FROM USERS WHERE USER_NAME=:userName`, { userName });
   if (dupUserName.rows.length) return res.status(409).json({ success: false, message: 'Username already exists' });
 
   const hash   = await bcrypt.hash(password, 12);
   const result = await db.execute(
-    `INSERT INTO USERS (NAME,USER_NAME,EMAIL,PASSWORD_HASH,ROLE)
-     VALUES (:name,:userName,:email,:hash,'CLIENT') RETURNING USER_ID INTO :userId`,
-    { name: name.trim(), userName: user_name.trim(), email: email.toLowerCase().trim(), hash, userId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } }
+    `INSERT INTO USERS (NAME,USER_NAME,EMAIL,PASSWORD_HASH,ROLE,REPORT_SERVER)
+     VALUES (:name,:userName,:email,:hash,'CLIENT',:reportServer) RETURNING USER_ID INTO :userId`,
+    { name: name.trim(), userName, email: email.toLowerCase().trim(), hash,
+      reportServer: reportEngine.getServerForEngine(), userId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } }
   );
   res.status(201).json({ success: true, message: 'Client created', data: { userId: result.outBinds.userId[0] } });
 };
@@ -84,10 +120,21 @@ exports.createClient = async (req, res) => {
 exports.updateClient = async (req, res) => {
   const { id } = req.params;
   const { name, user_name, is_active } = req.body;
+  const userName = user_name ? user_name.trim().toUpperCase() : null;
+
+  if (userName) {
+    const dupUserName = await db.execute(
+      `SELECT USER_ID FROM USERS WHERE USER_NAME=:userName AND USER_ID!=:id`,
+      { userName, id: Number(id) }
+    );
+    if (dupUserName.rows.length)
+      return res.status(409).json({ success: false, message: 'Username already exists' });
+  }
+
   await db.execute(
     `UPDATE USERS SET NAME=NVL(:name,NAME), USER_NAME=NVL(:userName,USER_NAME), IS_ACTIVE=NVL(:isActive,IS_ACTIVE), UPDATED_AT=SYSTIMESTAMP
      WHERE USER_ID=:id AND ROLE='CLIENT'`,
-    { name: name || null, userName: user_name || null, isActive: is_active ?? null, id: Number(id) }
+    { name: name || null, userName, isActive: is_active ?? null, id: Number(id) }
   );
   res.json({ success: true, message: 'Client updated' });
 };

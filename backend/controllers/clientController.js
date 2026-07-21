@@ -1,5 +1,20 @@
-const db  = require('../config/db');
-const bip = require('../services/bipSoapService');
+const db          = require('../config/db');
+const reportEngine = require('../config/reportEngine');
+
+// Client requests must run against the engine tied to *that user's*
+// REPORT_SERVER (BIP Server / Profinch Report Server), not whichever
+// edition the admin currently has the top-bar dropdown set to — that
+// dropdown only scopes the admin's own Users / Assign Reports / Report
+// Logs views (see adminController.js / reportEngine.js).
+async function getUserReportServer(userId) {
+  const result = await db.execute(`SELECT REPORT_SERVER FROM USERS WHERE USER_ID = :userId`, { userId });
+  return result.rows[0]?.REPORT_SERVER;
+}
+
+async function getBipForUser(userId) {
+  const reportServer = await getUserReportServer(userId);
+  return reportEngine.getServiceForServer(reportServer);
+}
 
 // Extracts the client's IP, unwrapping the IPv6-mapped IPv4 prefix (::ffff:) Node adds
 // when a client connects over IPv4.
@@ -99,7 +114,7 @@ async function applyCoreBankingFilter(userId, userRole, params) {
 // --- Resolve a report's .xdo object path ---
 // REPORT_PATH is stored as the catalog folder, e.g. "/Generic Reports/CASA/Dormant Accounts".
 // Ask BIP what the actual report object inside that folder is instead of guessing the file name.
-async function resolveOraclePath(basePath) {
+async function resolveOraclePath(bip, basePath) {
   if (basePath.endsWith('.xdo')) return basePath;
   return bip.resolveReportObjectPath(basePath);
 }
@@ -123,6 +138,7 @@ exports.getModules = async (req, res) => {
   );
   const assignedPaths = new Set(dbResult.rows.map(r => r.MODULE_PATH));
   if (!assignedPaths.size) return res.json({ success: true, data: [] });
+  const bip = await getBipForUser(userId);
   const allModules = await bip.getModules('/Generic Reports');
   res.json({ success: true, data: allModules.filter(m => assignedPaths.has(m.absolutePath)) });
 };
@@ -142,6 +158,7 @@ exports.getReports = async (req, res) => {
     { printFlag: r.PRINT_FLAG === 'Y', generateFlag: r.GENERATE_FLAG === 'Y' },
   ]));
   if (!assignedMap.size) return res.json({ success: true, data: [] });
+  const bip = await getBipForUser(userId);
   const allReports = await bip.getReportsByModule(path);
   const data = allReports
     .filter(r => assignedMap.has(r.absolutePath))
@@ -165,7 +182,8 @@ exports.getParameters = async (req, res) => {
     return res.status(403).json({ success: false, message: 'Access denied to this report' });
 
   try {
-    const oraclePath = await resolveOraclePath(rawPath);
+    const bip = await getBipForUser(userId);
+    const oraclePath = await resolveOraclePath(bip, rawPath);
     const params   = await bip.getReportParameters(oraclePath);
     const filtered = await applyCoreBankingFilter(userId, check.rows[0].USER_ROLE, params);
     res.json({ success: true, data: filtered });
@@ -193,7 +211,8 @@ exports.refreshParameters = async (req, res) => {
     return res.status(403).json({ success: false, message: 'Access denied to this report' });
 
   try {
-    const oraclePath = await resolveOraclePath(rawPath);
+    const bip = await getBipForUser(userId);
+    const oraclePath = await resolveOraclePath(bip, rawPath);
     const params   = await bip.getReportParameters(oraclePath, currentParams);
     const filtered = await applyCoreBankingFilter(userId, check.rows[0].USER_ROLE, params);
     res.json({ success: true, data: filtered });
@@ -206,10 +225,12 @@ exports.refreshParameters = async (req, res) => {
 exports.runReport = async (req, res) => {
   const { reportPath, format, params, templateId, locale, timezone, action, clientIp } = req.body;
   const userId = req.user.userId;
-  
+
   if (!reportPath || !format)
     return res.status(400).json({ success: false, message: 'reportPath and format are required' });
-    
+
+  const bip = await getBipForUser(userId);
+
   if (!bip.SUPPORTED_FORMATS.includes(format.toLowerCase()))
     return res.status(400).json({ success: false, message: `Allowed formats: ${bip.SUPPORTED_FORMATS.join(', ')}` });
 
@@ -227,7 +248,7 @@ exports.runReport = async (req, res) => {
 
   try {
     // 2. Resolve the actual .xdo report object for the Oracle SOAP Service
-    const oraclePath = await resolveOraclePath(reportPath);
+    const oraclePath = await resolveOraclePath(bip, reportPath);
 
     const userResult = await db.execute(`SELECT USER_NAME FROM USERS WHERE USER_ID = :userId`, { userId });
     const userName = userResult.rows[0]?.USER_NAME;

@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useReportEngine } from '../../context/ReportEngineContext';
 
 export default function Dashboard() {
+  const { engine } = useReportEngine();
   const [data, setData]     = useState({ totalClients:0, totalModules:0, totalReports:0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/admin/dashboard')
+    if (!engine) return;
+    Promise.resolve()
+      .then(() => setLoading(true))
+      .then(() => api.get('/admin/dashboard'))
       .then(r => setData(r.data.data))
       .catch(() => toast.error('Failed to load dashboard'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [engine]);
 
   const cards = [
     { label:'Total Modules',  value: data.totalModules,  color:'#1976d2', icon:'📁' },

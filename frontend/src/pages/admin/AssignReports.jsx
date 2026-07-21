@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useReportEngine } from '../../context/ReportEngineContext';
 
 export default function AssignReports() {
+  const { engine } = useReportEngine();
   const [clients,      setClients]      = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [modules,      setModules]      = useState([]);
@@ -13,8 +15,15 @@ export default function AssignReports() {
   const [loading,      setLoading]      = useState(false);
 
   useEffect(() => {
-    api.get('/admin/clients').then(r => setClients(r.data.data)).catch(() => toast.error('Failed to load clients'));
-  }, []);
+    if (!engine) return;
+    // A previously selected client may belong to the edition we just switched
+    // away from — drop the drill-down state and go back to the client list.
+    Promise.resolve()
+      .then(() => { setSelectedClient(null); setActiveModule(null); setReports([]); })
+      .then(() => api.get('/admin/clients'))
+      .then(r => setClients(r.data.data))
+      .catch(() => toast.error('Failed to load clients'));
+  }, [engine]);
 
   const selectClient = async (client) => {
     setSelectedClient(client);

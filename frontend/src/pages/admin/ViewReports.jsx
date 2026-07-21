@@ -1,19 +1,24 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useReportEngine } from '../../context/ReportEngineContext';
 
 export default function ViewReports() {
+  const { engine } = useReportEngine();
   const [modules,      setModules]      = useState([]);
   const [reports,      setReports]      = useState([]);
   const [activeModule, setActiveModule] = useState(null);
   const [loading,      setLoading]      = useState(true);
 
   useEffect(() => {
-    api.get('/admin/modules')
+    if (!engine) return;
+    Promise.resolve()
+      .then(() => { setActiveModule(null); setReports([]); setLoading(true); })
+      .then(() => api.get('/admin/modules'))
       .then(res => setModules(res.data.data))
       .catch(() => toast.error('Failed to load modules'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [engine]);
 
   const loadReports = async (mod) => {
     setLoading(true);

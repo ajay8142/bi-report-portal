@@ -6,6 +6,9 @@ const ctrl      = require('../controllers/adminController');
 
 router.use(auth, roleGuard('ADMIN'));
 
+router.get('/report-engine',                     ctrl.getReportEngine);
+router.put('/report-engine',                     ctrl.setReportEngine);
+
 router.get('/dashboard',                         ctrl.getDashboard);
 router.get('/modules',                           ctrl.getModules);
 router.get('/modules/reports',                   ctrl.getReports);
