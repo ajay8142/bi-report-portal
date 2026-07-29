@@ -1,0 +1,29 @@
+# docker-compose.dev.yml — local development overlay.
+#
+# Only containerizes backend1 (so you're testing against the same runtime as
+# production) with hot reload via nodemon and the source mounted as a volume.
+# Keep running the frontend with `npm run dev` (Vite HMR) as usual —
+# frontend/.env already points it at http://localhost:5000/api, unchanged.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build backend1
+#
+# backend2 and reverse-proxy are intentionally not started — this overlay is
+# for fast backend iteration, not for exercising the LB/TLS topology (use the
+# plain `docker-compose.yml` for that).
+
+services:
+  backend1:
+    build:
+      target: dev-deps # includes devDependencies (nodemon) — see backend/Dockerfile
+    container_name: bip-backend1-dev
+    command: ["npx", "nodemon", "server.js"]
+    environment:
+      NODE_ENV: development
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    healthcheck:
+      disable: true

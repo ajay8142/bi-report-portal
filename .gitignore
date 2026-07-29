@@ -1,0 +1,19 @@
+# Root-level ignores for the Docker/production infra added on top of
+# backend/.gitignore and frontend/.gitignore (kept as-is).
+
+node_modules/
+.env
+.env.*
+!.env.example
+
+# TLS material — generated locally via nginx/ssl/generate-self-signed.sh in
+# dev, or dropped in manually for prod. Never commit real keys/certs.
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Docker-mounted volumes materialized locally (acme webroot, monitoring data, etc.)
+docker-data/
+
+.DS_Store
+Thumbs.db

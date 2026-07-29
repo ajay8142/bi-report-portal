@@ -1,0 +1,9 @@
+# monitoring/prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # Per-container CPU/memory/disk/network — item 15 in the production checklist.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]

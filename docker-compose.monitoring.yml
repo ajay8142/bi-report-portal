@@ -1,0 +1,56 @@
+# docker-compose.monitoring.yml — optional container/resource monitoring
+# add-on (item 15: CPU, memory, disk, network, container status).
+#
+# Kept separate from docker-compose.yml so the core app stack stays lean and
+# this can be enabled only where you actually want a metrics stack running.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build
+#
+# Grafana: http://<host>:3001 (default admin/admin — change on first login)
+# Prometheus: http://<host>:9090 (not published publicly by default — see note below)
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+services:
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: bip-cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [bip-network]
+    # cAdvisor needs to read host container/cgroup info — this is the one
+    # container in the stack that legitimately can't run fully unprivileged.
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: bip-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [bip-network]
+    # Not published to the host by default — reach it via `docker compose exec`
+    # or a `ports:` override if you need direct access. Grafana is the
+    # intended dashboard entry point.
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: bip-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000"
+    networks: [bip-network]
+    depends_on:
+      - prometheus

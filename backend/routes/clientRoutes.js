@@ -2,16 +2,22 @@
 const router    = require('express').Router();
 const auth      = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
+const validate  = require('../middleware/validate');
+const schemas   = require('../validation/clientSchemas');
 const ctrl      = require('../controllers/clientController');
 
-router.use(auth, roleGuard('CLIENT'));
+module.exports = (limiters = {}) => {
+  router.use(auth, roleGuard('CLIENT'));
 
-router.get('/profile',            ctrl.getProfile);
-router.get('/modules',            ctrl.getModules);
-router.get('/modules/reports',    ctrl.getReports);
-router.get('/reports/parameters',  ctrl.getParameters);
-router.post('/reports/parameters', ctrl.refreshParameters);
-router.post('/reports/run',        ctrl.runReport);
-router.get('/history',             ctrl.getHistory);
+  router.get('/profile',             ctrl.getProfile);
+  router.get('/modules',             ctrl.getModules);
+  router.get('/modules/reports',     validate(schemas.getReports),        ctrl.getReports);
+  router.get('/reports/parameters',  validate(schemas.getParameters),     ctrl.getParameters);
+  router.post('/reports/parameters', validate(schemas.refreshParameters), ctrl.refreshParameters);
+  // Report generation and file download happen in this single call —
+  // apply the (tighter) report limiter here rather than a separate download route.
+  router.post('/reports/run', ...[limiters.report].filter(Boolean), validate(schemas.runReport), ctrl.runReport);
+  router.get('/history',             ctrl.getHistory);
 
-module.exports = router;
+  return router;
+};
