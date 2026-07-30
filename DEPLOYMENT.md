@@ -24,17 +24,25 @@ the one place that actually matters.
 ./install.sh
 ```
 
-Checks Docker is installed, creates `backend/.env` from `backend/.env.example`
-if missing, generates a self-signed dev TLS cert if `nginx/ssl/` is empty, then
-runs `docker compose up -d --build`. Safe to re-run — it skips anything
-already in place. You still need to edit `backend/.env` with real credentials
-before the backend will actually connect to anything.
+Checks Docker is installed, then walks you through `backend/.env` interactively
+(Oracle DB connection, BI Publisher/ReportingTool, JWT, public origin) —
+auto-generating `JWT_SECRET` on first run. Generates a self-signed dev TLS
+cert if `nginx/ssl/` is empty, then runs `docker compose up -d --build`.
 
-## First-time setup (manual)
+**Re-run it any time to change config** (rotate `JWT_SECRET`, update the Oracle
+connect string, switch the default report engine, etc.) — it's idempotent:
+existing `backend/.env` values are offered as the default at each prompt
+instead of starting blank, and pressing Enter keeps them. Changes take effect
+on the next `docker compose up -d --build`, which this script runs for you.
 
-1. **Backend env**: `backend/.env` already exists locally with real credentials
-   (gitignored). Confirm `FRONTEND_URL` is set to your public origin (e.g.
-   `https://yourhost`). Reference: `backend/.env.example`.
+`backend/.env.example` documents the same fields for reference (e.g. if you'd
+rather hand-edit the file instead of running the prompts).
+
+## First-time setup (manual, if you'd rather not use the prompts)
+
+1. **Backend env**: copy `backend/.env.example` to `backend/.env` and fill in
+   real `DB_*`/`BIP_*`/`JWT_SECRET` values. Confirm `FRONTEND_URL` is set to
+   your public origin (e.g. `https://yourhost`).
 2. **TLS cert**: for local/dev,
    ```bash
    ./nginx/ssl/generate-self-signed.sh yourhost.local
