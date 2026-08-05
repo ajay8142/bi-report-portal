@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { LANGUAGES } from '../../constants/languages';
 import {
   TextField,
   MenuItem,
@@ -224,6 +225,7 @@ export default function GenerateReport() {
   const [params,       setParams]       = useState([]);
   const [paramValues,  setParamValues]  = useState({});
   const [format,       setFormat]       = useState('pdf');
+  const [language,     setLanguage]     = useState('en');
   const [action,       setAction]       = useState('');
   const [loading,      setLoading]      = useState(false);
   const [running,      setRunning]      = useState(false);
@@ -307,6 +309,7 @@ export default function GenerateReport() {
       const res = await api.post('/client/reports/run', {
         reportPath: activeReport.absolutePath,
         format,
+        locale: language,
         params: paramPayload,
         action,
         clientIp,
@@ -460,6 +463,18 @@ export default function GenerateReport() {
                 >
                   {FORMATS.map(fmt => (
                     <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={s.outputField}>
+                <label style={s.label}>Report Language</label>
+                <select
+                  value={language}
+                  onChange={e => setLanguage(e.target.value)}
+                  style={s.select}
+                >
+                  {LANGUAGES.map(l => (
+                    <option key={l.code} value={l.code}>{l.label}</option>
                   ))}
                 </select>
               </div>

@@ -5,7 +5,7 @@ const { passwordComplexity } = require('./common');
 module.exports = {
   login: {
     body: Joi.object({
-      email: Joi.string().email({ tlds: { allow: false } }).required(),
+      user_name: Joi.string().trim().min(1).required(),
       password: Joi.string().required(),
     }),
   },

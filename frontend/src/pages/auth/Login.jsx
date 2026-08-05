@@ -9,8 +9,8 @@ import toast from 'react-hot-toast';
 import profinchLogo from '../../assets/profinchlogo.png';
 
 const schema = yup.object({
-  email:    yup.string().email('Invalid email').required('Email is required'),
-  password: yup.string().min(6, 'Min 6 characters').required('Password is required'),
+  user_name: yup.string().trim().required('Username is required'),
+  password:  yup.string().min(6, 'Min 6 characters').required('Password is required'),
 });
 
 export default function Login() {
@@ -43,9 +43,9 @@ export default function Login() {
   
         <form onSubmit={handleSubmit(onSubmit)}>
           <div style={s.field}>
-            <label style={s.label}>Email</label>
-            <input style={s.input} type="email" placeholder="you@company.com" {...register('email')} />
-            {errors.email && <span style={s.err}>{errors.email.message}</span>}
+            <label style={s.label}>Username</label>
+            <input style={s.input} type="text" placeholder="username" {...register('user_name')} />
+            {errors.user_name && <span style={s.err}>{errors.user_name.message}</span>}
           </div>
           <div style={s.field}>
             <label style={s.label}>Password</label>

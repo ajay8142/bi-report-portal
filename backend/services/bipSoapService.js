@@ -357,7 +357,6 @@ async function runReport({
     </v2:reportRequest>
     <v2:userID>${xmlEsc(BIP_USER)}</v2:userID>
     <v2:password>${xmlEsc(BIP_PASS)}</v2:password>`;
-
   const body = await postSoap(REPORT_ENDPOINT, 'runReport', reportRequestXml);
   const result = body?.runReportResponse?.runReportReturn;
 

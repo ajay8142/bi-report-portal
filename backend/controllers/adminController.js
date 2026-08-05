@@ -27,21 +27,61 @@ exports.setReportEngine = (req, res) => {
   }
 };
 
-exports.getDashboard = async (req, res) => {
-  const clientResult = await db.execute(
-    `SELECT COUNT(*) AS TOTAL_CLIENTS FROM USERS WHERE ROLE='CLIENT' AND IS_ACTIVE=1`
-  );
-  const modules = await bip.getModules('/Generic Reports');
-  let totalReports = 0;
-  for (const mod of modules) {
-    const reps = await bip.getReportsByModule(mod.absolutePath);
-    totalReports += reps.length;
+// ── Dashboard module/report totals — cached per engine ────────────────────
+// Walking every module's report folder over BIP's SOAP CatalogService is one
+// round trip per module, so it's slow — and the counts barely change minute
+// to minute. Cache the result per engine (BIP Enterprise / BIP Free) for a
+// while so re-opening the dashboard doesn't re-walk the whole catalog every
+// time. Concurrent requests for the same engine while a walk is already in
+// flight piggyback on that same request instead of starting another one.
+const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const dashboardCache = {}; // { [engine]: { data: {totalModules,totalReports}, cachedAt } | { promise } }
+
+async function getDashboardCounts(engine) {
+  const cached = dashboardCache[engine];
+  if (cached?.promise) return cached.promise;
+  if (cached?.data && Date.now() - cached.cachedAt < DASHBOARD_CACHE_TTL_MS) return cached.data;
+
+  const promise = (async () => {
+    const modules = await bip.getModules('/Generic Reports');
+    let totalReports = 0;
+    for (const mod of modules) {
+      const reps = await bip.getReportsByModule(mod.absolutePath);
+      totalReports += reps.length;
+    }
+    return { totalModules: modules.length, totalReports };
+  })();
+  dashboardCache[engine] = { promise };
+
+  try {
+    const data = await promise;
+    dashboardCache[engine] = { data, cachedAt: Date.now() };
+    return data;
+  } catch (err) {
+    delete dashboardCache[engine]; // don't cache a failure — let the next request retry
+    throw err;
   }
+}
+
+exports.getDashboard = async (req, res) => {
+  const engine = reportEngine.getEngine();
+
+  const clientResult = await db.execute(
+    `SELECT COUNT(*) AS TOTAL_CLIENTS
+    FROM USERS
+    WHERE ROLE = 'CLIENT'
+      AND IS_ACTIVE = 1
+      AND REPORT_SERVER = :reportServer`,
+    { reportServer: reportEngine.getServerForEngine() }
+  );
+
+  const { totalModules, totalReports } = await getDashboardCounts(engine);
+
   res.json({
     success: true,
     data: {
       totalClients: clientResult.rows[0].TOTAL_CLIENTS,
-      totalModules: modules.length,
+      totalModules,
       totalReports,
     },
   });
