@@ -275,6 +275,7 @@ exports.runReport = async (req, res) => {
       templateId: templateId || '',
       locale: locale || 'en-US',
       timezone: timezone || 'Asia/Calcutta',
+      action,
     });
 
     const reportName = reportPath.split('/').pop(); // Use the clean path name for the report name
@@ -293,7 +294,10 @@ exports.runReport = async (req, res) => {
     res.set('Content-Length', result.buffer.length);
     res.send(result.buffer);
   } catch (err) {
-    console.error("🚨 Run Report Error:", err.message);
+    const upstreamDetail = err.response?.data
+      ? (Buffer.isBuffer(err.response.data) ? err.response.data.toString('utf8') : JSON.stringify(err.response.data))
+      : null;
+    console.error("🚨 Run Report Error:", err.message, upstreamDetail ? `— upstream: ${upstreamDetail}` : '');
     res.status(500).json({ success: false, message: 'Failed to run report' });
   }
 };

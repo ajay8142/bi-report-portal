@@ -20,7 +20,7 @@
 
 const axios = require('axios');
 
-const BASE_URL   = process.env.REPORTING_TOOL_BASE_URL || 'http://localhost:8080';
+const BASE_URL   = process.env.REPORTING_TOOL_BASE_URL || 'http://10.20.5.18';
 const RT_USER     = process.env.REPORTING_TOOL_USERNAME;
 const RT_PASSWORD = process.env.REPORTING_TOOL_PASSWORD;
 
@@ -64,11 +64,19 @@ async function getFolderContents(folderAbsolutePath) {
   return res.data.data; // already [{displayName, absolutePath, type, description}]
 }
 
-// rootPath is ignored: ReportingTool's own top-level listing (Shared / My
-// Folder) already IS the top level here — there's no separate
-// "/Generic Reports" concept to descend into first, unlike real BIP.
+// rootPath is ignored: it's the BIP-specific "/Generic Reports" default that
+// callers always pass, which has no meaning for ReportingTool's catalog.
+// ReportingTool's own top-level listing is one level higher than the actual
+// modules: root -> "Shared" (absolutePath "/Shared") -> Modules (e.g. CASA)
+// -> Report Folder -> report object. So this fetches the root, finds the
+// "Shared" node, and returns ITS children as the modules — not the root's
+// own children (which would just be the single "Shared" entry itself).
 async function getModules(_rootPath) {
-  const items = await getFolderContents(null);
+  const rootItems = await getFolderContents(null);
+  const sharedFolder = rootItems.find(
+    (item) => item.type === 'folder' && /^shared/i.test(item.displayName || '')
+  );
+  const items = sharedFolder ? await getFolderContents(sharedFolder.absolutePath) : rootItems;
   return items.filter((item) => item.type === 'folder');
 }
 
@@ -145,12 +153,13 @@ async function runReport({
   templateId = '',
   locale     = 'en-US',
   timezone   = 'GMT',
+  action,
 }) {
   const normalizedFormat = format.toLowerCase();
   const res = await authedRequest({
     method: 'post',
     url: '/api/bip-compat/client/reports/run',
-    data: { reportPath: reportAbsolutePath, format: normalizedFormat, params, templateId, locale, timezone },
+    data: { reportPath: reportAbsolutePath, format: normalizedFormat, params, templateId, locale, timezone, action },
     responseType: 'arraybuffer',
   });
   const buffer      = Buffer.from(res.data);
