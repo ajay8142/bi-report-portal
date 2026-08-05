@@ -27,6 +27,17 @@ export default function Dashboard() {
   return (
     <div style={s.page}>
       <h2 style={s.heading}>Dashboard</h2>
+
+      <div style={s.hero}>
+        <div style={s.heroText}>
+          <h1 style={s.heroTitle}>Welcome to Profinch ReportX</h1>
+          <p style={s.heroSubtitle}>
+            Profinch ReportX is your centralized platform for business intelligence reporting.
+            Generate on-demand reports, track report history, and manage client access — all from one place.
+          </p>
+        </div>
+      </div>
+
       {loading ? <p>Loading…</p> : (
         <div style={s.grid}>
           {cards.map(c => (
@@ -43,8 +54,12 @@ export default function Dashboard() {
 }
 
 const s = {
-  page:    { padding:'32px' },
-  heading: { fontSize:'22px', fontWeight:700, marginBottom:'24px', color:'#1a1a2e' },
+  page:          { padding:'32px' },
+  heading:       { fontSize:'22px', fontWeight:700, marginBottom:'24px', color:'#1a1a2e' },
+  hero:          { background:'linear-gradient(135deg,#1976d2 0%,#1a1a2e 100%)', borderRadius:'14px', padding:'32px', marginBottom:'28px', color:'#fff', boxShadow:'0 4px 18px rgba(25,118,210,0.25)', textAlign:'center' },
+  heroText:      { maxWidth:'760px', margin:'0 auto' },
+  heroTitle:     { fontSize:'26px', fontWeight:800, margin:'0 0 10px' },
+  heroSubtitle:  { fontSize:'15px', lineHeight:1.6, margin:0, color:'rgba(255,255,255,0.88)' },
   grid:    { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'20px' },
   card:    { background:'#fff', borderRadius:'10px', padding:'24px', boxShadow:'0 2px 12px rgba(0,0,0,0.08)', textAlign:'center' },
   icon:    { fontSize:'32px', marginBottom:'8px' },

@@ -1,6 +1,13 @@
 const db          = require('../config/db');
 const reportEngine = require('../config/reportEngine');
 
+// Short codes the "Report Language" dropdown in Output Options sends —
+// mapped to the full BIP locale identifier runReport expects.
+const LOCALE_MAP = { en: 'en-US', fr: 'fr-FR', ar: 'ar-SA', ru: 'ru-RU', vi: 'vi-VN' };
+function resolveBipLocale(code) {
+  return LOCALE_MAP[(code || '').toLowerCase()] || LOCALE_MAP.en;
+}
+
 // Client requests must run against the engine tied to *that user's*
 // REPORT_SERVER (BIP Server / Profinch Report Server), not whichever
 // edition the admin currently has the top-bar dropdown set to — that
@@ -252,6 +259,8 @@ exports.runReport = async (req, res) => {
 
     const userResult = await db.execute(`SELECT USER_NAME FROM USERS WHERE USER_ID = :userId`, { userId });
     const userName = userResult.rows[0]?.USER_NAME;
+    // `locale` is the short code sent from the Report Language dropdown in Output Options.
+    const bipLocale = resolveBipLocale(locale);
 
     let finalParams = params || [];
     if (userName) {
@@ -273,7 +282,7 @@ exports.runReport = async (req, res) => {
       reportAbsolutePath: oraclePath,
       format, params: finalParams,
       templateId: templateId || '',
-      locale: locale || 'en-US',
+      locale: bipLocale,
       timezone: timezone || 'Asia/Calcutta',
       action,
     });

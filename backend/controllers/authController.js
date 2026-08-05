@@ -4,13 +4,15 @@ const jwt    = require('jsonwebtoken');
 const db     = require('../config/db');
 
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password)
-    return res.status(400).json({ success: false, message: 'Email and password required' });
+  const { user_name, password } = req.body;
+  if (!user_name || !password)
+    return res.status(400).json({ success: false, message: 'Username and password required' });
 
+  // USER_NAME is stored upper-cased (see adminController.createClient) — match that here too.
+  const userName = user_name.trim().toUpperCase();
   const result = await db.execute(
-    `SELECT USER_ID, NAME, EMAIL, PASSWORD_HASH, ROLE, IS_ACTIVE FROM USERS WHERE EMAIL = :email`,
-    { email: email.toLowerCase().trim() }
+    `SELECT USER_ID, NAME, EMAIL, PASSWORD_HASH, ROLE, IS_ACTIVE FROM USERS WHERE USER_NAME = :userName`,
+    { userName }
   );
   const user = result.rows[0];
   if (!user || !(await bcrypt.compare(password, user.PASSWORD_HASH)))
