@@ -227,11 +227,10 @@ export default function GenerateReport() {
   const [format,       setFormat]       = useState('pdf');
   const [language,     setLanguage]     = useState('en');
   const [action,       setAction]       = useState('');
-  const [loading,      setLoading]      = useState(false);
+  const [loading,      setLoading]      = useState(true);
   const [running,      setRunning]      = useState(false);
 
   useEffect(() => {
-    setLoading(true);
     api.get('/client/modules')
       .then(r => setModules(r.data.data))
       .catch(() => toast.error('Failed to load modules'))

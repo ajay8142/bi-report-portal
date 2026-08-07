@@ -5,7 +5,7 @@ import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [profile, setProfile] = useState(null);
   const [showPwd, setShowPwd] = useState(false);
   const { register, handleSubmit, reset, formState: { errors } } = useForm();

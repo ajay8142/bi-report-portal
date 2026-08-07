@@ -34,4 +34,5 @@ export function ReportEngineProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook belongs with its context/provider
 export const useReportEngine = () => useContext(ReportEngineContext);
