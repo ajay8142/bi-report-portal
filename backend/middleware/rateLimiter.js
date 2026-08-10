@@ -1,15 +1,10 @@
 // backend/middleware/rateLimiter.js
 //
-// Per-route-class rate limiting, in-memory (per Node process).
-//
-// Caveat: when running the two-container backend1/backend2 setup in
-// docker-compose.yml, each container keeps its own counter — a client
-// hitting both containers behind the nginx LB effectively gets up to 2x the
-// limit below before either instance blocks it. The nginx-level limits in
-// nginx/conf.d/ratelimit.conf apply across both containers and are the real
-// backstop for that case; treat these as a secondary, per-instance layer.
-// If that gap matters for your deployment, share the counters through a
-// central store (Redis, etc.) instead of in-memory.
+// Per-route-class rate limiting, in-memory (per Node process). Since
+// docker-compose.yml runs a single backend container, this counter is
+// authoritative — no cross-container double-counting to worry about. The
+// nginx-level limits in nginx/conf.d/ratelimit.conf still apply ahead of
+// this as defense in depth.
 
 const rateLimit = require('express-rate-limit');
 

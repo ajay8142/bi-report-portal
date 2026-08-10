@@ -1,9 +1,8 @@
 // backend/ecosystem.config.js
 // PM2 config used by `pm2-runtime` inside the backend container.
-// Fork mode, single instance per container: horizontal scale-out is handled
-// at the Docker/nginx layer (backend1 + backend2), so PM2's job here is just
-// process supervision — auto-restart on crash, graceful SIGTERM handling, and
-// stdout/stderr log management — not clustering.
+// Fork mode, single instance: PM2's job here is just process supervision —
+// auto-restart on crash, graceful SIGTERM handling, and stdout/stderr log
+// management — not clustering.
 module.exports = {
   apps: [
     {
