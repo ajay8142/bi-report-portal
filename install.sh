@@ -98,36 +98,47 @@ fi
 ask JWT_EXPIRES_IN "Token lifetime (e.g. 8h, 30m)" "8h"
 
 # --- Oracle DB (external — this stack doesn't containerize it) ---
+
 echo
 echo "Oracle DB connection (existing instance — not managed by this stack):"
 ask DB_USER "  DB_USER"
 ask_secret DB_PASSWORD "  DB_PASSWORD"
 ask DB_CONNECT_STRING "  DB_CONNECT_STRING (host:port/service_name, or a full connect descriptor)"
 
-# --- Oracle BI Publisher (the default report engine) ---
+# --- Oracle BI Publisher ---
+
 echo
 echo "Oracle BI Publisher SOAP connection:"
-ask BIP_BASE_URL "  BIP_BASE_URL (e.g. https://bip.yourcompany.com:9704)"
+ask BIP_BASE_URL "  BIP_BASE_URL"
 ask BIP_USERNAME "  BIP_USERNAME"
 ask_secret BIP_PASSWORD "  BIP_PASSWORD"
 
-# --- Report engine default (switchable live later from the admin top-bar) ---
+
+# --- ReportingTool ---
+
 echo
-echo "Which report engine should this deployment default to at startup?"
-echo "  1) bip           - real Oracle BI Publisher SOAP service (default)"
-echo "  2) reportingtool - ReportingTool's REST shim (BIP Free)"
-echo "(Admins can flip this live later from the admin top-bar dropdown without restarting.)"
+echo "ReportingTool REST connection:"
+ask REPORTING_TOOL_BASE_URL "  REPORTING_TOOL_BASE_URL"
+ask REPORTING_TOOL_USERNAME "  REPORTING_TOOL_USERNAME"
+ask_secret REPORTING_TOOL_PASSWORD "  REPORTING_TOOL_PASSWORD"
+
+
+# --- Default report engine ---
+
+echo
+echo "Which report engine should this deployment default to?"
+echo "  1) bip           - Oracle BI Publisher"
+echo "  2) reportingtool - ReportingTool REST shim"
+
 current_choice=1
 [ "${REPORT_ENGINE:-bip}" = "reportingtool" ] && current_choice=2
+
 read -r -p "Choice [${current_choice}]: " engine_choice
 engine_choice="${engine_choice:-$current_choice}"
 
 case "$engine_choice" in
     2)
         REPORT_ENGINE="reportingtool"
-        ask REPORTING_TOOL_BASE_URL "  REPORTING_TOOL_BASE_URL"
-        ask REPORTING_TOOL_USERNAME "  REPORTING_TOOL_USERNAME"
-        ask_secret REPORTING_TOOL_PASSWORD "  REPORTING_TOOL_PASSWORD"
         ;;
     *)
         REPORT_ENGINE="bip"
