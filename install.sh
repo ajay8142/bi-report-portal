@@ -97,6 +97,14 @@ else
 fi
 ask JWT_EXPIRES_IN "Token lifetime (e.g. 8h, 30m)" "8h"
 
+# --- Oracle DB (external — this stack doesn't containerize it) ---
+
+echo
+echo "Oracle DB connection (existing instance — not managed by this stack):"
+ask DB_USER "  DB_USER"
+ask_secret DB_PASSWORD "  DB_PASSWORD"
+ask DB_CONNECT_STRING "  DB_CONNECT_STRING (host:port/service_name, or a full connect descriptor)"
+
 # --- Oracle BI Publisher ---
 
 echo
