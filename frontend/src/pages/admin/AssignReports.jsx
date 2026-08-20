@@ -76,7 +76,15 @@ export default function AssignReports() {
         isEnabled:  enabled,
         userRole,
       });
-      setAssignments(prev => ({ ...prev, [report.absolutePath]: { ...prev[report.absolutePath], isEnabled: enabled, userRole } }));
+      setAssignments(prev => ({
+        ...prev,
+        [report.absolutePath]: {
+          ...prev[report.absolutePath],
+          isEnabled: enabled,
+          userRole,
+          ...(enabled ? {} : { printFlag: false, generateFlag: false }),
+        },
+      }));
       toast.success(enabled ? 'Report enabled' : 'Report disabled');
     } catch (err) { toast.error(err.response?.data?.message || 'Toggle failed'); }
   };
@@ -106,7 +114,7 @@ export default function AssignReports() {
     if (!window.confirm('Disable ALL reports for this client?')) return;
     try {
       await api.put(`/admin/assignments/${selectedClient.USER_ID}/disable-all`);
-      setAssignments(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, isEnabled: false }])));
+      setAssignments(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, isEnabled: false, printFlag: false, generateFlag: false }])));
       toast.success('All reports disabled');
     } catch { toast.error('Failed'); }
   };
@@ -244,8 +252,8 @@ export default function AssignReports() {
                               </select>
                             </td>
                             <td style={{ ...s.td, textAlign:'center' }}>
-                              <label style={s.toggleWrap}>
-                                <input type="checkbox" style={{ display:'none' }} checked={printFlag}
+                              <label style={{ ...s.toggleWrap, opacity: enabled ? 1 : 0.5, cursor: enabled ? 'pointer' : 'not-allowed' }}>
+                                <input type="checkbox" style={{ display:'none' }} checked={printFlag} disabled={!enabled}
                                   onChange={e => toggleFlag(r, 'PRINT', e.target.checked)} />
                                 <span style={{ ...s.toggleTrack, background: printFlag ? '#1976d2' : '#ccc' }}>
                                   <span style={{ ...s.toggleThumb, left: printFlag ? '20px' : '2px' }} />
@@ -253,8 +261,8 @@ export default function AssignReports() {
                               </label>
                             </td>
                             <td style={{ ...s.td, textAlign:'center' }}>
-                              <label style={s.toggleWrap}>
-                                <input type="checkbox" style={{ display:'none' }} checked={generateFlag}
+                              <label style={{ ...s.toggleWrap, opacity: enabled ? 1 : 0.5, cursor: enabled ? 'pointer' : 'not-allowed' }}>
+                                <input type="checkbox" style={{ display:'none' }} checked={generateFlag} disabled={!enabled}
                                   onChange={e => toggleFlag(r, 'GENERATE', e.target.checked)} />
                                 <span style={{ ...s.toggleTrack, background: generateFlag ? '#1976d2' : '#ccc' }}>
                                   <span style={{ ...s.toggleThumb, left: generateFlag ? '20px' : '2px' }} />

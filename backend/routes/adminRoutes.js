@@ -25,6 +25,10 @@ router.post('/assignments',                      validate(schemas.toggleAssignme
 router.put('/assignments/flag',                  validate(schemas.setAssignmentFlag),    ctrl.setAssignmentFlag);
 router.put('/assignments/:clientId/disable-all', validate(schemas.clientIdParams),       ctrl.disableAllAssignments);
 
+// Report Finder (semantic search) — proxied to the Python search service.
+router.get('/report-search',                     validate(schemas.searchReports),        ctrl.searchReports);
+router.get('/report-search/:id',                 validate(schemas.reportSearchIdParams), ctrl.getReportSearchDetail);
+
 // Branch access
 router.get('/access/branches',                     ctrl.getBranches);
 router.post('/access/branches',                    validate(schemas.accessMutation),      ctrl.addBranch);

@@ -7,6 +7,7 @@ import profinchLogo from '../assets/profinchlogo.png';
 const navItems = [
   { to: '/admin/dashboard',    icon: '📊', label: 'Dashboard'      },
   { to: '/admin/view-reports', icon: '📁', label: 'View Reports'   },
+  { to: '/admin/search-reports', icon: '🔍', label: 'Search Reports' },
   { to: '/admin/clients',      icon: '👥', label: 'Users'          },
   { to: '/admin/assign',       icon: '🔗', label: 'Assign Reports' },
   { to: '/admin/logs',         icon: '🕒', label: 'Report Logs'    },

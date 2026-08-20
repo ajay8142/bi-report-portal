@@ -5,6 +5,7 @@ import ProtectedRoute from './routes/ProtectedRoute';
 import Login from './pages/auth/Login';
 import Dashboard from './pages/admin/Dashboard';
 import ViewReports from './pages/admin/ViewReports';
+import SearchReports from './pages/admin/SearchReports';
 import Clients from './pages/admin/Clients';
 import AssignReports from './pages/admin/AssignReports';
 import ReportLogs from './pages/admin/ReportLogs';
@@ -27,6 +28,7 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard"    element={<Dashboard />} />
             <Route path="view-reports" element={<ViewReports />} />
+            <Route path="search-reports" element={<SearchReports />} />
             <Route path="clients"      element={<Clients />} />
             <Route path="assign"       element={<AssignReports />} />
             <Route path="logs"         element={<ReportLogs />} />

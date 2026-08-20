@@ -99,4 +99,17 @@ module.exports = {
       code: Joi.string().min(1).required(),
     }),
   },
+
+  searchReports: {
+    query: Joi.object({
+      q: Joi.string().trim().min(1).required(),
+      top_k: Joi.number().integer().min(1).max(50).optional(),
+    }),
+  },
+
+  // :id — a Chroma document id from the /report-search results, used to fetch
+  // one report's full metadata.
+  reportSearchIdParams: {
+    params: Joi.object({ id: Joi.string().trim().min(1).required() }),
+  },
 };

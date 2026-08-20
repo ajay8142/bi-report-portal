@@ -5,6 +5,7 @@ const bcrypt   = require('bcryptjs');
 const oracledb = require('oracledb');
 const db       = require('../config/db');
 const reportEngine = require('../config/reportEngine');
+const reportFinder  = require('../services/reportFinderService');
 
 // Forwards every call to whichever engine (bipSoapService / reportingToolService)
 // is currently selected, so a runtime engine switch takes effect on the next
@@ -234,7 +235,9 @@ exports.toggleAssignment = async (req, res) => {
   );
   if (existing.rows.length) {
     await db.execute(
-      `UPDATE REPORT_ASSIGNMENTS SET IS_ENABLED=:isEnabled, USER_ROLE=NVL(:userRole, USER_ROLE), ASSIGNED_AT=SYSTIMESTAMP
+      `UPDATE REPORT_ASSIGNMENTS
+       SET IS_ENABLED=:isEnabled, USER_ROLE=NVL(:userRole, USER_ROLE), ASSIGNED_AT=SYSTIMESTAMP
+           ${isEnabled ? '' : ", PRINT_FLAG='N', GENERATE_FLAG='N'"}
        WHERE USER_ID=:clientId AND REPORT_PATH=:reportPath`,
       { isEnabled: isEnabled ? 1 : 0, userRole: userRole || null, clientId: Number(clientId), reportPath }
     );
@@ -281,10 +284,36 @@ exports.setAssignmentFlag = async (req, res) => {
 
 exports.disableAllAssignments = async (req, res) => {
   await db.execute(
-    `UPDATE REPORT_ASSIGNMENTS SET IS_ENABLED=0, ASSIGNED_AT=SYSTIMESTAMP WHERE USER_ID=:clientId`,
+    `UPDATE REPORT_ASSIGNMENTS
+     SET IS_ENABLED=0, PRINT_FLAG='N', GENERATE_FLAG='N', ASSIGNED_AT=SYSTIMESTAMP
+     WHERE USER_ID=:clientId`,
     { clientId: Number(req.params.clientId) }
   );
   res.json({ success: true, message: 'All reports disabled' });
+};
+
+// ── Report Finder (semantic search) ───────────────────────────────────────────
+// GET /admin/report-search?q=...&top_k=5 — proxies to the "Report Finder"
+// Python service (Flask + ChromaDB) so the browser never talks to it directly.
+exports.searchReports = async (req, res) => {
+  const { q, top_k } = req.query;
+  try {
+    const hits = await reportFinder.search(q, top_k || 5);
+    res.json({ success: true, data: hits });
+  } catch (err) {
+    res.status(502).json({ success: false, message: 'Report search service unavailable' });
+  }
+};
+
+// GET /admin/report-search/:id — full metadata (description, tables, columns, SQL) for one hit.
+exports.getReportSearchDetail = async (req, res) => {
+  try {
+    const data = await reportFinder.getReport(req.params.id);
+    if (data.error) return res.status(404).json({ success: false, message: data.error });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(502).json({ success: false, message: 'Report search service unavailable' });
+  }
 };
 
 // ── Branch Access ─────────────────────────────────────────────────────────────
