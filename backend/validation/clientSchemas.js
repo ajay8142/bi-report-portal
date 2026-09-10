@@ -31,7 +31,8 @@ module.exports = {
       format: Joi.string().trim().lowercase().min(1).required(),
       params: Joi.array().items(reportParamItem).default([]),
       templateId: Joi.string().allow('').default(''),
-      locale: Joi.string().trim().lowercase().optional(),
+      // Report locale is no longer client-supplied — clientController.runReport
+      // resolves it server-side from the user's assigned REPORT_LANGUAGE.
       timezone: Joi.string().trim().optional(),
       action: Joi.string().valid('preview', 'download').optional(),
       // Best-effort client-reported IP for the audit log — resolveClientIp()

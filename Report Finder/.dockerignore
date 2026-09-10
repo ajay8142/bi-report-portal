@@ -1,0 +1,14 @@
+# Standalone dev tools/UI not needed inside the search-api container —
+# the Node backend proxies to this service instead of the browser hitting
+# it directly, so client/ and server/ never run in Docker.
+client/
+server/
+reports.xlsx
+build_report_vectorstore.py
+test.py
+README.md
+
+__pycache__/
+*.pyc
+.venv/
+venv/

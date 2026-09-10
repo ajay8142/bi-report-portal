@@ -3,7 +3,7 @@
 #   reverse-proxy (nginx, host :8090 -> container :8888, plain HTTP — TLS not terminated)
 #        │
 #        ├── frontend (nginx, static SPA)
-#        └── backend (single container)
+#        └── backend (single container) ── report-finder (Flask + ChromaDB semantic search)
 #
 # Oracle DB is external — not containerized. Point DB_CONNECT_STRING (in
 # backend/.env) at your existing Oracle instance.
@@ -13,13 +13,39 @@
 # about. The nginx-level limits in nginx/conf.d/ratelimit.conf still apply
 # ahead of it as defense in depth.
 #
+# report-finder loads a ~1.3GB HuggingFace embedding model on first start,
+# which can take up to ~2 minutes — backend only waits for it to be
+# service_started (not service_healthy), and degrades gracefully (502 on
+# /admin/report-search) until it's ready, so it never blocks the rest of
+# the stack from coming up.
+#
 # Bring up: docker compose up -d --build
 
 networks:
   bip-network:
     driver: bridge
 
+volumes:
+  report-finder-model-cache:
+
 services:
+
+  report-finder:
+    build:
+      context: ./Report Finder
+      dockerfile: Dockerfile
+    container_name: bip-report-finder
+    restart: unless-stopped
+    volumes:
+      - report-finder-model-cache:/app/.cache
+    networks:
+      - bip-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 150s
 
   backend:
     build:
@@ -31,6 +57,10 @@ services:
       - ./backend/.env
     environment:
       PORT: 5000
+      REPORT_FINDER_URL: http://report-finder:8000
+    depends_on:
+      report-finder:
+        condition: service_started
     networks:
       - bip-network
     healthcheck:

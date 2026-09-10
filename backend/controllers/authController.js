@@ -11,7 +11,7 @@ exports.login = async (req, res) => {
   // USER_NAME is stored upper-cased (see adminController.createClient) — match that here too.
   const userName = user_name.trim().toUpperCase();
   const result = await db.execute(
-    `SELECT USER_ID, NAME, EMAIL, PASSWORD_HASH, ROLE, IS_ACTIVE FROM USERS WHERE USER_NAME = :userName`,
+    `SELECT USER_ID, NAME, EMAIL, PASSWORD_HASH, ROLE, IS_ACTIVE, REPORT_LANGUAGE FROM USERS WHERE USER_NAME = :userName`,
     { userName }
   );
   const user = result.rows[0];
@@ -20,14 +20,18 @@ exports.login = async (req, res) => {
   if (!user.IS_ACTIVE)
     return res.status(403).json({ success: false, message: 'Account is disabled' });
 
+  // Short UI/report locale code (en/fr/ar/...) — drives both the portal's own
+  // language and the default report generation locale (see clientController.runReport).
+  const language = (user.REPORT_LANGUAGE || 'EN').toLowerCase();
+
   const token = jwt.sign(
-    { userId: user.USER_ID, email: user.EMAIL, role: user.ROLE, name: user.NAME },
+    { userId: user.USER_ID, email: user.EMAIL, role: user.ROLE, name: user.NAME, language },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
   );
   res.json({
     success: true, token,
-    user: { id: user.USER_ID, name: user.NAME, email: user.EMAIL, role: user.ROLE },
+    user: { id: user.USER_ID, name: user.NAME, email: user.EMAIL, role: user.ROLE, language },
   });
 };
 

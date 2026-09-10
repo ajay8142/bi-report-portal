@@ -1,0 +1,377 @@
+/* Matches the standalone "Report Finder" client's look (dark theme, purple
+   accent) exactly, regardless of the admin dashboard's own light theme or the
+   browser/OS color-scheme preference — scoped entirely under .rf-page so it
+   can't leak into the rest of the admin app. */
+
+.rf-page {
+  --rf-text: #9ca3af;
+  --rf-text-h: #f3f4f6;
+  --rf-bg: #16171d;
+  --rf-border: #2e303a;
+  --rf-code-bg: #1f2028;
+  --rf-accent: #a855f7;
+  --rf-accent-bg: rgba(168, 85, 247, 0.18);
+  --rf-accent-border: rgba(168, 85, 247, 0.5);
+  --rf-social-bg: rgba(47, 48, 58, 0.6);
+  --rf-shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  --rf-mono: ui-monospace, Consolas, monospace;
+
+  background: var(--rf-bg);
+  min-height: 100%;
+}
+
+.rf-app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 20px 60px;
+  text-align: left;
+}
+
+.rf-hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.rf-hero h1 {
+  margin: 0 0 8px;
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--rf-text-h);
+  letter-spacing: -0.02em;
+}
+
+.rf-tagline {
+  color: var(--rf-text);
+  font-size: 16px;
+  margin: 0;
+}
+
+.rf-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 640px;
+  margin: 0 auto 28px;
+  padding: 6px 8px 6px 16px;
+  border: 1px solid var(--rf-border);
+  border-radius: 999px;
+  background: var(--rf-code-bg);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.rf-search-bar:focus-within {
+  border-color: var(--rf-accent-border);
+  box-shadow: 0 0 0 4px var(--rf-accent-bg);
+}
+
+.rf-search-icon {
+  display: flex;
+  color: var(--rf-text);
+  flex-shrink: 0;
+}
+
+.rf-search-bar input {
+  flex: 1;
+  font: inherit;
+  font-size: 16px;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--rf-text-h);
+  outline: none;
+  min-width: 0;
+}
+
+.rf-search-bar input::placeholder {
+  color: var(--rf-text);
+}
+
+.rf-clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rf-text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rf-clear-btn:hover {
+  background: var(--rf-social-bg);
+}
+
+.rf-submit-btn {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 999px;
+  background: var(--rf-accent);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.rf-submit-btn:hover {
+  opacity: 0.9;
+}
+
+.rf-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rf-hint {
+  text-align: center;
+  color: var(--rf-text);
+}
+
+.rf-content {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.rf-results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rf-result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--rf-border);
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--rf-code-bg);
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.rf-result-card:hover {
+  box-shadow: var(--rf-shadow);
+  transform: translateY(-1px);
+}
+
+.rf-result-card.selected {
+  border-color: var(--rf-accent);
+  background: var(--rf-accent-bg);
+}
+
+.rf-result-card.empty {
+  cursor: default;
+  color: var(--rf-text);
+}
+
+.rf-result-card.empty:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+.rf-report-name {
+  font-weight: 600;
+  color: var(--rf-text-h);
+}
+
+.rf-module-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--rf-accent-bg);
+  color: var(--rf-accent);
+  white-space: nowrap;
+}
+
+.rf-skeleton {
+  cursor: default;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rf-skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--rf-border);
+  animation: rf-pulse 1.2s ease-in-out infinite;
+}
+
+.rf-skeleton-line.wide {
+  width: 70%;
+}
+
+.rf-skeleton-line.narrow {
+  width: 35%;
+}
+
+@keyframes rf-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.rf-details {
+  position: relative;
+  flex: 1.4;
+  border: 1px solid var(--rf-border);
+  border-radius: 10px;
+  padding: 24px;
+  min-width: 0;
+  background: var(--rf-code-bg);
+}
+
+.rf-details h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  color: var(--rf-text-h);
+}
+
+.rf-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rf-text);
+  cursor: pointer;
+}
+
+.rf-close-btn:hover {
+  background: var(--rf-social-bg);
+}
+
+.rf-description {
+  margin: 16px 0;
+  color: var(--rf-text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.rf-field {
+  margin-bottom: 16px;
+}
+
+.rf-field-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--rf-text);
+  margin-bottom: 6px;
+}
+
+.rf-field-empty {
+  color: var(--rf-text);
+}
+
+.rf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rf-chip {
+  font-family: var(--rf-mono);
+  font-size: 12.5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: var(--rf-bg);
+  border: 1px solid var(--rf-border);
+  color: var(--rf-text-h);
+}
+
+.rf-sql-block {
+  margin-top: 20px;
+  border: 1px solid var(--rf-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rf-sql-block summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--rf-bg);
+  color: var(--rf-text-h);
+}
+
+.rf-sql-block pre {
+  margin: 0;
+  padding: 14px;
+  overflow-x: auto;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--rf-code-bg);
+}
+
+.rf-sql-block code {
+  font-family: var(--rf-mono);
+  font-size: 12.5px;
+  white-space: pre;
+  background: none;
+  padding: 0;
+  color: var(--rf-text-h);
+}
+
+.rf-error {
+  color: #f87171;
+  text-align: center;
+}
+
+.rf-loading-text {
+  color: var(--rf-text);
+}
+
+@media (max-width: 720px) {
+  .rf-content {
+    flex-direction: column;
+  }
+
+  .rf-search-bar {
+    flex-wrap: wrap;
+    border-radius: 20px;
+  }
+
+  .rf-submit-btn {
+    width: 100%;
+    order: 3;
+  }
+}
+
+[dir="rtl"] .rf-app {
+  text-align: right;
+}
+
+[dir="rtl"] .rf-search-bar {
+  padding: 6px 16px 6px 8px;
+}
+
+[dir="rtl"] .rf-close-btn {
+  right: auto;
+  left: 16px;
+}

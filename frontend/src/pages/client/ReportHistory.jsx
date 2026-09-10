@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../../context/LanguageContext';
 
 function formatDateTime(raw) {
   if (!raw) return '—';
@@ -13,6 +14,7 @@ function formatDateTime(raw) {
 }
 
 export default function ReportHistory() {
+  const { t } = useLanguage();
   const [rows,    setRows]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState('');
@@ -20,8 +22,9 @@ export default function ReportHistory() {
   useEffect(() => {
     api.get('/client/history')
       .then(r => setRows(r.data.data || []))
-      .catch(() => toast.error('Failed to load report history'))
+      .catch(() => toast.error(t('toast_load_report_history_failed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   const filtered = rows.filter(row => {
@@ -33,29 +36,29 @@ export default function ReportHistory() {
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>Report History</h2>
-      <p style={s.sub}>All reports you have generated, most recent first.</p>
+      <h2 style={s.heading}>{t('heading_report_history')}</h2>
+      <p style={s.sub}>{t('sub_all_reports_generated')}</p>
 
       <div style={s.toolbar}>
         <input
           style={s.search}
-          placeholder="Search by report name or format…"
+          placeholder={t('search_placeholder_report')}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <span style={s.count}>{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
+        <span style={s.count}>{filtered.length} {filtered.length !== 1 ? t('record_plural') : t('record_singular')}</span>
       </div>
 
       {loading ? (
-        <p style={s.msg}>Loading…</p>
+        <p style={s.msg}>{t('loading')}</p>
       ) : filtered.length === 0 ? (
-        <p style={s.msg}>{search ? 'No matching records.' : 'No report history yet.'}</p>
+        <p style={s.msg}>{search ? t('msg_no_matching_records') : t('msg_no_report_history')}</p>
       ) : (
         <div style={s.tableWrap}>
           <table style={s.table}>
             <thead>
               <tr>
-                {['S No.', 'Report Name', 'Format', 'Action', 'Date & Time'].map(h => (
+                {[t('col_sno'), t('col_report_name'), t('col_format'), t('col_action'), t('col_date_time')].map(h => (
                   <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
@@ -72,7 +75,7 @@ export default function ReportHistory() {
                   </td>
                   <td style={s.td}>
                     <span style={{ ...s.badge, ...(row.ACTION === 'GENERATE' ? s.generateBadge : s.printBadge) }}>
-                      {row.ACTION === 'GENERATE' ? '👁 Generate' : '🖨 Print'}
+                      {row.ACTION === 'GENERATE' ? `👁 ${t('word_generate')}` : `🖨 ${t('word_print')}`}
                     </span>
                   </td>
                   <td style={{ ...s.td, ...s.tdDate }}>{formatDateTime(row.CREATED_AT)}</td>

@@ -3,16 +3,19 @@ import { useForm } from 'react-hook-form';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useReportEngine } from '../../context/ReportEngineContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { LANGUAGES } from '../../constants/languages';
 
 export default function Clients() {
   const { engine } = useReportEngine();
+  const { t } = useLanguage();
   const [clients, setClients]   = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [editId, setEditId]     = useState(null);
   const [showPwdForm, setShowPwdForm] = useState(null);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: { report_language: 'en' } });
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, formState: { errors: pwdErrors } } = useForm();
 
   // USER_NAME is stored upper-cased in the DB — mirror that live as the admin types
@@ -23,7 +26,7 @@ export default function Clients() {
     try {
       const res = await api.get('/admin/clients');
       setClients(res.data.data);
-    } catch { toast.error('Failed to load clients'); }
+    } catch { toast.error(t('toast_load_clients_failed')); }
   };
 
   useEffect(() => { if (engine) Promise.resolve().then(fetchClients); }, [engine]);
@@ -32,68 +35,68 @@ export default function Clients() {
     setLoading(true);
     try {
       if (editId) {
-        await api.put(`/admin/clients/${editId}`, { name: data.name, user_name: data.user_name });
-        toast.success('Client updated');
+        await api.put(`/admin/clients/${editId}`, { name: data.name, user_name: data.user_name, report_language: data.report_language });
+        toast.success(t('toast_client_updated'));
       } else {
         await api.post('/admin/clients', data);
-        toast.success('Client created');
+        toast.success(t('toast_client_created'));
       }
       reset(); setShowForm(false); setEditId(null);
       fetchClients();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Operation failed');
+      toast.error(err.response?.data?.message || t('toast_operation_failed'));
     } finally { setLoading(false); }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this client?')) return;
+    if (!window.confirm(t('confirm_delete_client'))) return;
     try {
       await api.delete(`/admin/clients/${id}`);
-      toast.success('Client deleted');
+      toast.success(t('toast_client_deleted'));
       fetchClients();
-    } catch { toast.error('Delete failed'); }
+    } catch { toast.error(t('toast_delete_failed')); }
   };
 
   const handleToggleActive = async (client) => {
     try {
       await api.put(`/admin/clients/${client.USER_ID}`, { is_active: client.IS_ACTIVE === 1 ? 0 : 1 });
-      toast.success('Status updated');
+      toast.success(t('toast_status_updated'));
       fetchClients();
-    } catch { toast.error('Update failed'); }
+    } catch { toast.error(t('toast_update_failed')); }
   };
 
   const onChangePwd = async (data) => {
     if (data.newPassword !== data.confirmPassword)
-      return toast.error('Passwords do not match');
+      return toast.error(t('toast_passwords_mismatch'));
     try {
       await api.put('/auth/change-password', { currentPassword: data.currentPassword, newPassword: data.newPassword });
-      toast.success('Password changed');
+      toast.success(t('toast_password_changed'));
       setShowPwdForm(null); resetPwd();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    } catch (err) { toast.error(err.response?.data?.message || t('toast_failed_generic')); }
   };
 
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h2 style={s.heading}>User Management</h2>
-        <button style={s.addBtn} onClick={() => { setShowForm(true); setEditId(null); reset(); }}>
-          + Add User
+        <h2 style={s.heading}>{t('heading_user_management')}</h2>
+        <button style={s.addBtn} onClick={() => { setShowForm(true); setEditId(null); reset({ report_language: 'en' }); }}>
+          + {t('add_user')}
         </button>
       </div>
 
       {/* Create / Edit Form */}
       {showForm && (
         <div style={s.formCard}>
-          <h3 style={s.formTitle}>{editId ? 'Edit Client' : 'Create New Client'}</h3>
+          <h3 style={s.formTitle}>{editId ? t('form_title_edit_client') : t('form_title_create_client')}</h3>
           <form onSubmit={handleSubmit(onSubmit)}>
             <div style={s.formRow}>
               <div style={s.field}>
-                <label style={s.label}>Full Name *</label>
-                <input style={s.input} {...register('name', { required: 'Name is required', minLength: { value: 3, message: 'Min 3 characters' } })} />
+                <label style={s.label}>{t('full_name')} *</label>
+                <input style={s.input} {...register('name', { required: t('validation_name_required'), minLength: { value: 3, message: t('validation_min3') } })} />
                 {errors.name && <span style={s.err}>{errors.name.message}</span>}
               </div>
               <div style={s.field}>
-                <label style={s.label}>Username *</label>
+                <label style={s.label}>{t('username')} *</label>
                 <input
                   style={s.input}
                   {...userNameField}
@@ -101,18 +104,26 @@ export default function Clients() {
                 />
                 {errors.user_name && <span style={s.err}>{errors.user_name.message}</span>}
               </div>
+              <div style={s.field}>
+                <label style={s.label}>{t('report_language')} *</label>
+                <select style={s.input} {...register('report_language', { required: true })}>
+                  {LANGUAGES.map(l => (
+                    <option key={l.code} value={l.code}>{t(`lang_name_${l.code}`)}</option>
+                  ))}
+                </select>
+              </div>
               {!editId && (
                 <>
                   <div style={s.field}>
-                    <label style={s.label}>Email *</label>
-                    <input style={s.input} type="email" {...register('email', { required: 'Email is required', pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' } })} />
+                    <label style={s.label}>{t('email')} *</label>
+                    <input style={s.input} type="email" {...register('email', { required: t('validation_email_required'), pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: t('validation_email_invalid') } })} />
                     {errors.email && <span style={s.err}>{errors.email.message}</span>}
                   </div>
                   <div style={s.field}>
-                    <label style={s.label}>Password *</label>
+                    <label style={s.label}>{t('password')} *</label>
                     <input style={s.input} type="password" {...register('password', {
-                      required: 'Password is required',
-                      pattern: { value: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/, message: 'Min 8 chars, 1 uppercase, 1 number, 1 special char' }
+                      required: t('validation_password_required'),
+                      pattern: { value: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/, message: t('validation_password_complexity') }
                     })} />
                     {errors.password && <span style={s.err}>{errors.password.message}</span>}
                   </div>
@@ -120,8 +131,8 @@ export default function Clients() {
               )}
             </div>
             <div style={s.formActions}>
-              <button style={s.submitBtn} type="submit" disabled={loading}>{loading ? 'Saving…' : 'Save'}</button>
-              <button style={s.cancelBtn} type="button" onClick={() => { setShowForm(false); reset(); setEditId(null); }}>Cancel</button>
+              <button style={s.submitBtn} type="submit" disabled={loading}>{loading ? t('saving') : t('save')}</button>
+              <button style={s.cancelBtn} type="button" onClick={() => { setShowForm(false); reset(); setEditId(null); }}>{t('cancel')}</button>
             </div>
           </form>
         </div>
@@ -130,31 +141,31 @@ export default function Clients() {
       {/* Password Change Form */}
       {showPwdForm && (
         <div style={s.formCard}>
-          <h3 style={s.formTitle}>Change Password</h3>
+          <h3 style={s.formTitle}>{t('form_title_change_password')}</h3>
           <form onSubmit={handlePwd(onChangePwd)}>
             <div style={s.formRow}>
               <div style={s.field}>
-                <label style={s.label}>Current Password *</label>
-                <input style={s.input} type="password" {...regPwd('currentPassword', { required: 'Required' })} />
+                <label style={s.label}>{t('current_password')} *</label>
+                <input style={s.input} type="password" {...regPwd('currentPassword', { required: t('validation_required') })} />
                 {pwdErrors.currentPassword && <span style={s.err}>{pwdErrors.currentPassword.message}</span>}
               </div>
               <div style={s.field}>
-                <label style={s.label}>New Password *</label>
+                <label style={s.label}>{t('new_password')} *</label>
                 <input style={s.input} type="password" {...regPwd('newPassword', {
-                  required: 'Required',
-                  pattern: { value: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/, message: 'Min 8 chars, 1 uppercase, 1 number, 1 special char' }
+                  required: t('validation_required'),
+                  pattern: { value: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/, message: t('validation_password_complexity') }
                 })} />
                 {pwdErrors.newPassword && <span style={s.err}>{pwdErrors.newPassword.message}</span>}
               </div>
               <div style={s.field}>
-                <label style={s.label}>Confirm Password *</label>
-                <input style={s.input} type="password" {...regPwd('confirmPassword', { required: 'Required' })} />
+                <label style={s.label}>{t('confirm_password')} *</label>
+                <input style={s.input} type="password" {...regPwd('confirmPassword', { required: t('validation_required') })} />
                 {pwdErrors.confirmPassword && <span style={s.err}>{pwdErrors.confirmPassword.message}</span>}
               </div>
             </div>
             <div style={s.formActions}>
-              <button style={s.submitBtn} type="submit">Update Password</button>
-              <button style={s.cancelBtn} type="button" onClick={() => { setShowPwdForm(null); resetPwd(); }}>Cancel</button>
+              <button style={s.submitBtn} type="submit">{t('update_password')}</button>
+              <button style={s.cancelBtn} type="button" onClick={() => { setShowPwdForm(null); resetPwd(); }}>{t('cancel')}</button>
             </div>
           </form>
         </div>
@@ -165,14 +176,14 @@ export default function Clients() {
         <table style={s.table}>
           <thead>
             <tr>
-              {['S No.','Name','Username','Email','Report Server','Status','Created','Actions'].map(h => (
+              {[t('col_sno'), t('col_name'), t('col_username'), t('col_email'), t('col_report_server'), t('col_report_language'), t('col_status'), t('col_created'), t('col_actions')].map(h => (
                 <th key={h} style={s.th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {clients.length === 0 ? (
-              <tr><td colSpan={8} style={s.empty}>No clients found</td></tr>
+              <tr><td colSpan={9} style={s.empty}>{t('empty_no_clients')}</td></tr>
             ) : clients.map((c, i) => (
               <tr key={c.USER_ID} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                 <td style={s.td}>{i + 1}</td>
@@ -180,19 +191,20 @@ export default function Clients() {
                 <td style={s.td}>{c.USER_NAME}</td>
                 <td style={s.td}>{c.EMAIL}</td>
                 <td style={s.td}>{c.REPORT_SERVER}</td>
+                <td style={s.td}>{t(`lang_name_${(c.REPORT_LANGUAGE || 'en').toLowerCase()}`)}</td>
                 <td style={s.td}>
                   <span style={{ ...s.badge, background: c.IS_ACTIVE ? '#e8f5e9' : '#fce4ec', color: c.IS_ACTIVE ? '#2e7d32' : '#c62828' }}>
-                    {c.IS_ACTIVE ? 'Active' : 'Inactive'}
+                    {c.IS_ACTIVE ? t('badge_active') : t('badge_inactive')}
                   </span>
                 </td>
                 <td style={s.td}>{new Date(c.CREATED_AT).toLocaleDateString()}</td>
                 <td style={s.td}>
-                  <button style={s.actionBtn} onClick={() => { setEditId(c.USER_ID); reset({ name: c.NAME, user_name: c.USER_NAME }); setShowForm(true); }}>Edit</button>
+                  <button style={s.actionBtn} onClick={() => { setEditId(c.USER_ID); reset({ name: c.NAME, user_name: c.USER_NAME, report_language: (c.REPORT_LANGUAGE || 'EN').toLowerCase() }); setShowForm(true); }}>{t('action_edit')}</button>
                   <button style={{ ...s.actionBtn, background: '#fff3e0', color: '#e65100' }} onClick={() => handleToggleActive(c)}>
-                    {c.IS_ACTIVE ? 'Disable' : 'Enable'}
+                    {c.IS_ACTIVE ? t('action_disable') : t('action_enable')}
                   </button>
-                  <button style={{ ...s.actionBtn, background: '#e3f2fd', color: '#1565c0' }} onClick={() => setShowPwdForm(c.USER_ID)}>Pwd</button>
-                  <button style={{ ...s.actionBtn, background: '#fce4ec', color: '#c62828' }} onClick={() => handleDelete(c.USER_ID)}>Delete</button>
+                  <button style={{ ...s.actionBtn, background: '#e3f2fd', color: '#1565c0' }} onClick={() => setShowPwdForm(c.USER_ID)}>{t('action_pwd')}</button>
+                  <button style={{ ...s.actionBtn, background: '#fce4ec', color: '#c62828' }} onClick={() => handleDelete(c.USER_ID)}>{t('action_delete')}</button>
                 </td>
               </tr>
             ))}

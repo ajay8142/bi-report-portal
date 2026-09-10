@@ -5,6 +5,11 @@ const { idParam, email, passwordComplexity } = require('./common');
 // Must match the ENGINES keys in config/reportEngine.js.
 const ENGINE_NAMES = ['bip', 'reportingtool'];
 
+// Must match the codes in frontend/src/constants/languages.js and
+// clientController.js's LOCALE_MAP.
+const REPORT_LANGUAGES = ['EN', 'FR', 'AR', 'RU', 'VI'];
+const reportLanguage = Joi.string().trim().uppercase().valid(...REPORT_LANGUAGES);
+
 const assignmentFields = {
   clientId: Joi.number().integer().positive().required(),
   // Empty strings are the normal case here (see toggleAssignment/setAssignmentFlag
@@ -42,6 +47,7 @@ module.exports = {
       user_name: Joi.string().trim().min(1).required(),
       email,
       password: passwordComplexity,
+      report_language: reportLanguage.default('EN'),
     }),
   },
 
@@ -51,6 +57,7 @@ module.exports = {
       name: Joi.string().trim().min(1),
       user_name: Joi.string().trim().min(1),
       is_active: Joi.number().valid(0, 1), // frontend sends 0/1, not true/false — see Clients.jsx
+      report_language: reportLanguage,
     }).min(1), // at least one field to update
   },
 
@@ -98,5 +105,18 @@ module.exports = {
       // just needs to be a non-empty string at this layer.
       code: Joi.string().min(1).required(),
     }),
+  },
+
+  searchReports: {
+    query: Joi.object({
+      q: Joi.string().trim().min(1).required(),
+      top_k: Joi.number().integer().min(1).max(50).optional(),
+    }),
+  },
+
+  // :id — a Chroma document id from the /report-search results, used to fetch
+  // one report's full metadata.
+  reportSearchIdParams: {
+    params: Joi.object({ id: Joi.string().trim().min(1).required() }),
   },
 };

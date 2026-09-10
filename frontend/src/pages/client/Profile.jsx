@@ -1,42 +1,50 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 
 export default function Profile() {
-  const { logout } = useAuth();
+  const { logout, updateUser } = useAuth();
+  const { t } = useLanguage();
   const [profile, setProfile] = useState(null);
   const [showPwd, setShowPwd] = useState(false);
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   useEffect(() => {
     api.get('/client/profile')
-      .then(r => setProfile(r.data.data))
-      .catch(() => toast.error('Failed to load profile'));
+      .then(r => {
+        setProfile(r.data.data);
+        // Keeps the portal's UI/report language in sync if an admin changed it
+        // for this user since they last logged in.
+        updateUser({ language: r.data.data.language });
+      })
+      .catch(() => toast.error(t('toast_load_profile_failed')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   const onChangePwd = async (data) => {
     if (data.newPassword !== data.confirmPassword)
-      return toast.error('Passwords do not match');
+      return toast.error(t('toast_passwords_mismatch'));
     try {
       await api.put('/auth/change-password', {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       });
-      toast.success('Password updated successfully');
+      toast.success(t('toast_password_updated_success'));
       setShowPwd(false);
       reset();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update password');
+      toast.error(err.response?.data?.message || t('toast_password_update_failed'));
     }
   };
 
-  if (!profile) return <div style={s.page}><p>Loading…</p></div>;
+  if (!profile) return <div style={s.page}><p>{t('loading')}</p></div>;
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>My Profile</h2>
+      <h2 style={s.heading}>{t('heading_my_profile')}</h2>
 
       <div style={s.card}>
         <div style={s.avatarWrap}>
@@ -44,55 +52,59 @@ export default function Profile() {
         </div>
         <div style={s.infoGrid}>
           <div style={s.infoItem}>
-            <span style={s.infoLabel}>Full Name</span>
+            <span style={s.infoLabel}>{t('full_name')}</span>
             <span style={s.infoVal}>{profile.NAME}</span>
           </div>
           <div style={s.infoItem}>
-            <span style={s.infoLabel}>Email</span>
+            <span style={s.infoLabel}>{t('email')}</span>
             <span style={s.infoVal}>{profile.EMAIL}</span>
           </div>
           <div style={s.infoItem}>
-            <span style={s.infoLabel}>Role</span>
+            <span style={s.infoLabel}>{t('role')}</span>
             <span style={{ ...s.badge, background:'#e3f2fd', color:'#1565c0' }}>{profile.ROLE}</span>
           </div>
           <div style={s.infoItem}>
-            <span style={s.infoLabel}>Member Since</span>
+            <span style={s.infoLabel}>{t('report_language')}</span>
+            <span style={s.infoVal}>{t(`lang_name_${(profile.language || 'en').toLowerCase()}`)}</span>
+          </div>
+          <div style={s.infoItem}>
+            <span style={s.infoLabel}>{t('member_since')}</span>
             <span style={s.infoVal}>{new Date(profile.CREATED_AT).toLocaleDateString()}</span>
           </div>
         </div>
         <div style={s.actions}>
           <button style={s.pwdBtn} onClick={() => setShowPwd(!showPwd)}>
-            {showPwd ? 'Cancel' : '🔒 Change Password'}
+            {showPwd ? t('cancel') : `🔒 ${t('change_password')}`}
           </button>
-          <button style={s.logoutBtn} onClick={logout}>Logout</button>
+          <button style={s.logoutBtn} onClick={logout}>{t('logout')}</button>
         </div>
       </div>
 
       {showPwd && (
         <div style={s.formCard}>
-          <h3 style={s.formTitle}>Change Password</h3>
+          <h3 style={s.formTitle}>{t('change_password')}</h3>
           <form onSubmit={handleSubmit(onChangePwd)}>
             <div style={s.formRow}>
               <div style={s.field}>
-                <label style={s.label}>Current Password *</label>
-                <input style={s.input} type="password" {...register('currentPassword', { required: 'Required' })} />
+                <label style={s.label}>{t('current_password')} *</label>
+                <input style={s.input} type="password" {...register('currentPassword', { required: t('validation_required') })} />
                 {errors.currentPassword && <span style={s.err}>{errors.currentPassword.message}</span>}
               </div>
               <div style={s.field}>
-                <label style={s.label}>New Password *</label>
+                <label style={s.label}>{t('new_password')} *</label>
                 <input style={s.input} type="password" {...register('newPassword', {
-                  required: 'Required',
-                  pattern: { value: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/, message: 'Min 8 chars, 1 uppercase, 1 number, 1 special char' }
+                  required: t('validation_required'),
+                  pattern: { value: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/, message: t('validation_password_complexity') }
                 })} />
                 {errors.newPassword && <span style={s.err}>{errors.newPassword.message}</span>}
               </div>
               <div style={s.field}>
-                <label style={s.label}>Confirm Password *</label>
-                <input style={s.input} type="password" {...register('confirmPassword', { required: 'Required' })} />
+                <label style={s.label}>{t('confirm_password')} *</label>
+                <input style={s.input} type="password" {...register('confirmPassword', { required: t('validation_required') })} />
                 {errors.confirmPassword && <span style={s.err}>{errors.confirmPassword.message}</span>}
               </div>
             </div>
-            <button style={s.submitBtn} type="submit">Update Password</button>
+            <button style={s.submitBtn} type="submit">{t('update_password')}</button>
           </form>
         </div>
       )}

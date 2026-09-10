@@ -5,6 +5,7 @@ const bcrypt   = require('bcryptjs');
 const oracledb = require('oracledb');
 const db       = require('../config/db');
 const reportEngine = require('../config/reportEngine');
+const reportFinder  = require('../services/reportFinderService');
 
 // Forwards every call to whichever engine (bipSoapService / reportingToolService)
 // is currently selected, so a runtime engine switch takes effect on the next
@@ -116,7 +117,7 @@ exports.getReports = async (req, res) => {
 // one endpoint, so filtering here is enough to scope all three.
 exports.getClients = async (req, res) => {
   const result = await db.execute(
-    `SELECT USER_ID, NAME, USER_NAME, EMAIL, IS_ACTIVE, CREATED_AT, REPORT_SERVER
+    `SELECT USER_ID, NAME, USER_NAME, EMAIL, IS_ACTIVE, CREATED_AT, REPORT_SERVER, REPORT_LANGUAGE
      FROM USERS WHERE ROLE='CLIENT' AND REPORT_SERVER=:reportServer ORDER BY CREATED_AT DESC`,
     { reportServer: reportEngine.getServerForEngine() }
   );
@@ -124,7 +125,7 @@ exports.getClients = async (req, res) => {
 };
 
 exports.createClient = async (req, res) => {
-  const { name, user_name, email, password } = req.body;
+  const { name, user_name, email, password, report_language } = req.body;
   if (!name || !user_name || !email || !password)
     return res.status(400).json({ success: false, message: 'name, user_name, email and password are required' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -133,6 +134,7 @@ exports.createClient = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Password: min 8 chars, 1 uppercase, 1 number, 1 special char' });
 
   const userName = user_name.trim().toUpperCase();
+  const reportLanguage = (report_language || 'EN').toUpperCase();
 
   // The username must be a real core-banking (FCUBS) user — everything this app
   // does for a client (branch/product access, report restriction filters) is
@@ -149,9 +151,9 @@ exports.createClient = async (req, res) => {
 
   const hash   = await bcrypt.hash(password, 12);
   const result = await db.execute(
-    `INSERT INTO USERS (NAME,USER_NAME,EMAIL,PASSWORD_HASH,ROLE,REPORT_SERVER)
-     VALUES (:name,:userName,:email,:hash,'CLIENT',:reportServer) RETURNING USER_ID INTO :userId`,
-    { name: name.trim(), userName, email: email.toLowerCase().trim(), hash,
+    `INSERT INTO USERS (NAME,USER_NAME,EMAIL,PASSWORD_HASH,ROLE,REPORT_SERVER,REPORT_LANGUAGE)
+     VALUES (:name,:userName,:email,:hash,'CLIENT',:reportServer,:reportLanguage) RETURNING USER_ID INTO :userId`,
+    { name: name.trim(), userName, email: email.toLowerCase().trim(), hash, reportLanguage,
       reportServer: reportEngine.getServerForEngine(), userId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } }
   );
   res.status(201).json({ success: true, message: 'Client created', data: { userId: result.outBinds.userId[0] } });
@@ -159,8 +161,9 @@ exports.createClient = async (req, res) => {
 
 exports.updateClient = async (req, res) => {
   const { id } = req.params;
-  const { name, user_name, is_active } = req.body;
+  const { name, user_name, is_active, report_language } = req.body;
   const userName = user_name ? user_name.trim().toUpperCase() : null;
+  const reportLanguage = report_language ? report_language.trim().toUpperCase() : null;
 
   if (userName) {
     const dupUserName = await db.execute(
@@ -172,9 +175,10 @@ exports.updateClient = async (req, res) => {
   }
 
   await db.execute(
-    `UPDATE USERS SET NAME=NVL(:name,NAME), USER_NAME=NVL(:userName,USER_NAME), IS_ACTIVE=NVL(:isActive,IS_ACTIVE), UPDATED_AT=SYSTIMESTAMP
+    `UPDATE USERS SET NAME=NVL(:name,NAME), USER_NAME=NVL(:userName,USER_NAME), IS_ACTIVE=NVL(:isActive,IS_ACTIVE),
+            REPORT_LANGUAGE=NVL(:reportLanguage,REPORT_LANGUAGE), UPDATED_AT=SYSTIMESTAMP
      WHERE USER_ID=:id AND ROLE='CLIENT'`,
-    { name: name || null, userName, isActive: is_active ?? null, id: Number(id) }
+    { name: name || null, userName, isActive: is_active ?? null, reportLanguage, id: Number(id) }
   );
   res.json({ success: true, message: 'Client updated' });
 };
@@ -234,7 +238,9 @@ exports.toggleAssignment = async (req, res) => {
   );
   if (existing.rows.length) {
     await db.execute(
-      `UPDATE REPORT_ASSIGNMENTS SET IS_ENABLED=:isEnabled, USER_ROLE=NVL(:userRole, USER_ROLE), ASSIGNED_AT=SYSTIMESTAMP
+      `UPDATE REPORT_ASSIGNMENTS
+       SET IS_ENABLED=:isEnabled, USER_ROLE=NVL(:userRole, USER_ROLE), ASSIGNED_AT=SYSTIMESTAMP
+           ${isEnabled ? '' : ", PRINT_FLAG='N', GENERATE_FLAG='N'"}
        WHERE USER_ID=:clientId AND REPORT_PATH=:reportPath`,
       { isEnabled: isEnabled ? 1 : 0, userRole: userRole || null, clientId: Number(clientId), reportPath }
     );
@@ -281,10 +287,36 @@ exports.setAssignmentFlag = async (req, res) => {
 
 exports.disableAllAssignments = async (req, res) => {
   await db.execute(
-    `UPDATE REPORT_ASSIGNMENTS SET IS_ENABLED=0, ASSIGNED_AT=SYSTIMESTAMP WHERE USER_ID=:clientId`,
+    `UPDATE REPORT_ASSIGNMENTS
+     SET IS_ENABLED=0, PRINT_FLAG='N', GENERATE_FLAG='N', ASSIGNED_AT=SYSTIMESTAMP
+     WHERE USER_ID=:clientId`,
     { clientId: Number(req.params.clientId) }
   );
   res.json({ success: true, message: 'All reports disabled' });
+};
+
+// ── Report Finder (semantic search) ───────────────────────────────────────────
+// GET /admin/report-search?q=...&top_k=5 — proxies to the "Report Finder"
+// Python service (Flask + ChromaDB) so the browser never talks to it directly.
+exports.searchReports = async (req, res) => {
+  const { q, top_k } = req.query;
+  try {
+    const hits = await reportFinder.search(q, top_k || 5);
+    res.json({ success: true, data: hits });
+  } catch (err) {
+    res.status(502).json({ success: false, message: 'Report search service unavailable' });
+  }
+};
+
+// GET /admin/report-search/:id — full metadata (description, tables, columns, SQL) for one hit.
+exports.getReportSearchDetail = async (req, res) => {
+  try {
+    const data = await reportFinder.getReport(req.params.id);
+    if (data.error) return res.status(404).json({ success: false, message: data.error });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(502).json({ success: false, message: 'Report search service unavailable' });
+  }
 };
 
 // ── Branch Access ─────────────────────────────────────────────────────────────

@@ -13,6 +13,16 @@ export function AuthProvider({ children }) {
     setUser(userData);
   };
 
+  // Merges fresh fields (e.g. `language`, re-fetched from /profile) into the
+  // stored user without a full re-login.
+  const updateUser = (partial) => {
+    setUser(prev => {
+      const next = { ...prev, ...partial };
+      localStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const logout = () => {
     localStorage.clear();
     setUser(null);
@@ -20,7 +30,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

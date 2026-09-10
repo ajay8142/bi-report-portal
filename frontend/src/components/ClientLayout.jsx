@@ -1,14 +1,16 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import profinchLogo from '../assets/profinchlogo.png';
 
 const navItems = [
-  { to: '/client/generate', icon: '📄', label: 'Generate Report' },
-  { to: '/client/history',  icon: '🕓', label: 'Report History'  },
+  { to: '/client/generate', icon: '📄', key: 'nav_generate_report' },
+  { to: '/client/history',  icon: '🕓', key: 'nav_report_history'  },
 ];
 
 export default function ClientLayout() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
 
   return (
     <div style={s.shell}>
@@ -22,7 +24,7 @@ export default function ClientLayout() {
               to={n.to}
               style={({ isActive }) => ({ ...s.link, ...(isActive ? s.linkActive : {}) })}
             >
-              <span>{n.icon}</span> {n.label}
+              <span>{n.icon}</span> {t(n.key)}
             </NavLink>
           ))}
         </nav>
@@ -34,7 +36,7 @@ export default function ClientLayout() {
           >
             👤 {user?.name}
           </NavLink>
-          <button style={s.logoutBtn} onClick={logout}>Logout</button>
+          <button style={s.logoutBtn} onClick={logout}>{t('logout')}</button>
         </div>
       </header>
 

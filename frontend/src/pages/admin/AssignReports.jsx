@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useReportEngine } from '../../context/ReportEngineContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function AssignReports() {
   const { engine } = useReportEngine();
+  const { t } = useLanguage();
   const [clients,      setClients]      = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [modules,      setModules]      = useState([]);
@@ -22,7 +24,8 @@ export default function AssignReports() {
       .then(() => { setSelectedClient(null); setActiveModule(null); setReports([]); })
       .then(() => api.get('/admin/clients'))
       .then(r => setClients(r.data.data))
-      .catch(() => toast.error('Failed to load clients'));
+      .catch(() => toast.error(t('toast_load_clients_failed')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on edition switch
   }, [engine]);
 
   const selectClient = async (client) => {
@@ -49,7 +52,7 @@ export default function AssignReports() {
       });
       setAssignments(map);
       setRoles(roleRes.data.data);
-    } catch { toast.error('Failed to load data'); }
+    } catch { toast.error(t('toast_load_data_failed')); }
     finally  { setLoading(false); }
   };
 
@@ -59,13 +62,13 @@ export default function AssignReports() {
     try {
       const res = await api.get('/admin/modules/reports', { params: { path: mod.absolutePath } });
       setReports(res.data.data);
-    } catch { toast.error('Failed to load reports'); }
+    } catch { toast.error(t('toast_load_reports_failed')); }
     finally  { setLoading(false); }
   };
 
   const toggle = async (report, enabled) => {
     const userRole = assignments[report.absolutePath]?.userRole || '';
-    if (enabled && !userRole) return toast.error('Select a role for this report first');
+    if (enabled && !userRole) return toast.error(t('toast_select_role_first'));
     try {
       await api.post('/admin/assignments', {
         clientId:   selectedClient.USER_ID,
@@ -76,9 +79,17 @@ export default function AssignReports() {
         isEnabled:  enabled,
         userRole,
       });
-      setAssignments(prev => ({ ...prev, [report.absolutePath]: { ...prev[report.absolutePath], isEnabled: enabled, userRole } }));
-      toast.success(enabled ? 'Report enabled' : 'Report disabled');
-    } catch (err) { toast.error(err.response?.data?.message || 'Toggle failed'); }
+      setAssignments(prev => ({
+        ...prev,
+        [report.absolutePath]: {
+          ...prev[report.absolutePath],
+          isEnabled: enabled,
+          userRole,
+          ...(enabled ? {} : { printFlag: false, generateFlag: false }),
+        },
+      }));
+      toast.success(enabled ? t('toast_report_enabled') : t('toast_report_disabled'));
+    } catch (err) { toast.error(err.response?.data?.message || t('toast_toggle_failed')); }
   };
 
   const changeRole = (report, userRole) => {
@@ -98,39 +109,40 @@ export default function AssignReports() {
         value,
       });
       setAssignments(prev => ({ ...prev, [report.absolutePath]: { ...prev[report.absolutePath], [key]: value } }));
-      toast.success(`${flag === 'PRINT' ? 'Print' : 'Generate'} ${value ? 'enabled' : 'disabled'}`);
-    } catch (err) { toast.error(err.response?.data?.message || 'Toggle failed'); }
+      if (flag === 'PRINT') toast.success(value ? t('toast_print_enabled') : t('toast_print_disabled'));
+      else toast.success(value ? t('toast_generate_enabled') : t('toast_generate_disabled'));
+    } catch (err) { toast.error(err.response?.data?.message || t('toast_toggle_failed')); }
   };
 
   const disableAll = async () => {
-    if (!window.confirm('Disable ALL reports for this client?')) return;
+    if (!window.confirm(t('confirm_disable_all'))) return;
     try {
       await api.put(`/admin/assignments/${selectedClient.USER_ID}/disable-all`);
-      setAssignments(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, isEnabled: false }])));
-      toast.success('All reports disabled');
-    } catch { toast.error('Failed'); }
+      setAssignments(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, isEnabled: false, printFlag: false, generateFlag: false }])));
+      toast.success(t('toast_all_reports_disabled'));
+    } catch { toast.error(t('toast_failed_generic')); }
   };
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>Assign Reports</h2>
+      <h2 style={s.heading}>{t('heading_assign_reports')}</h2>
 
       {/* Step 1: Select Client */}
       {!selectedClient ? (
         <>
-          <p style={s.sub}>Select a User to manage their report assignments:</p>
+          <p style={s.sub}>{t('sub_select_user_assignments')}</p>
           <div style={s.tableWrap}>
             <table style={s.table}>
               <thead>
                 <tr>
-                  <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                  <th style={{ ...s.th }}>User Name</th>
-                  <th style={{ ...s.th }}>Email</th>
+                  <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                  <th style={{ ...s.th }}>{t('col_user_name')}</th>
+                  <th style={{ ...s.th }}>{t('col_email')}</th>
                 </tr>
               </thead>
               <tbody>
                 {clients.length === 0 ? (
-                  <tr><td colSpan={3} style={s.empty}>No Users found</td></tr>
+                  <tr><td colSpan={3} style={s.empty}>{t('empty_no_users')}</td></tr>
                 ) : clients.map((c, i) => (
                   <tr
                     key={c.USER_ID}
@@ -152,17 +164,17 @@ export default function AssignReports() {
         <>
           {/* Header with client info + back + disable all */}
           <div style={s.clientHeader}>
-            <button style={s.backBtn} onClick={() => { setSelectedClient(null); setActiveModule(null); setReports([]); }}>← Back</button>
+            <button style={s.backBtn} onClick={() => { setSelectedClient(null); setActiveModule(null); setReports([]); }}>← {t('back')}</button>
             <div style={s.clientInfo}>
               <strong>{selectedClient.NAME}</strong> — {selectedClient.EMAIL}
             </div>
-            <button style={s.disableAllBtn} onClick={disableAll}>🚫 Disable All Reports</button>
+            <button style={s.disableAllBtn} onClick={disableAll}>🚫 {t('disable_all_reports')}</button>
           </div>
 
           {/* Breadcrumb */}
           <div style={s.breadcrumb}>
             <span style={activeModule ? s.crumbLink : s.crumbCurrent} onClick={() => { setActiveModule(null); setReports([]); }}>
-              📁 Modules
+              📁 {t('modules')}
             </span>
             {activeModule && (
               <>
@@ -172,7 +184,7 @@ export default function AssignReports() {
             )}
           </div>
 
-          {loading && <p style={s.loading}>Loading…</p>}
+          {loading && <p style={s.loading}>{t('loading')}</p>}
 
           {/* Modules */}
           {!activeModule && !loading && (
@@ -180,13 +192,13 @@ export default function AssignReports() {
               <table style={s.table}>
                 <thead>
                   <tr>
-                    <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                    <th style={{ ...s.th }}>Module Name</th>
+                    <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                    <th style={{ ...s.th }}>{t('col_module_name')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {modules.length === 0 ? (
-                    <tr><td colSpan={2} style={s.empty}>No modules found</td></tr>
+                    <tr><td colSpan={2} style={s.empty}>{t('empty_no_modules')}</td></tr>
                   ) : modules.map((mod, i) => (
                     <tr
                       key={mod.absolutePath}
@@ -210,17 +222,17 @@ export default function AssignReports() {
               <table style={s.table}>
                 <thead>
                   <tr>
-                    <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                    <th style={{ ...s.th }}>Report Name</th>
-                    <th style={{ ...s.th}}>Role</th>
-                    <th style={{ ...s.th, textAlign:'center' }}>Print</th>
-                    <th style={{ ...s.th, textAlign:'center' }}>Generate</th>
-                    <th style={{ ...s.th}}>Assigned</th>
+                    <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                    <th style={{ ...s.th }}>{t('col_report_name')}</th>
+                    <th style={{ ...s.th}}>{t('col_role')}</th>
+                    <th style={{ ...s.th, textAlign:'center' }}>{t('col_print')}</th>
+                    <th style={{ ...s.th, textAlign:'center' }}>{t('col_generate')}</th>
+                    <th style={{ ...s.th}}>{t('col_assigned')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reports.length === 0
-                    ? <tr><td colSpan={6} style={s.empty}>No reports in this module</td></tr>
+                    ? <tr><td colSpan={6} style={s.empty}>{t('empty_no_reports_in_module')}</td></tr>
                     : reports.map((r, i) => {
                         const entry        = assignments[r.absolutePath] || {};
                         const enabled      = !!entry.isEnabled;
@@ -237,15 +249,15 @@ export default function AssignReports() {
                                 value={role}
                                 onChange={e => changeRole(r, e.target.value)}
                               >
-                                <option value="">Select role…</option>
+                                <option value="">{t('select_role_placeholder')}</option>
                                 {roles.map(roleId => (
                                   <option key={roleId} value={roleId}>{roleId}</option>
                                 ))}
                               </select>
                             </td>
                             <td style={{ ...s.td, textAlign:'center' }}>
-                              <label style={s.toggleWrap}>
-                                <input type="checkbox" style={{ display:'none' }} checked={printFlag}
+                              <label style={{ ...s.toggleWrap, opacity: enabled ? 1 : 0.5, cursor: enabled ? 'pointer' : 'not-allowed' }}>
+                                <input type="checkbox" style={{ display:'none' }} checked={printFlag} disabled={!enabled}
                                   onChange={e => toggleFlag(r, 'PRINT', e.target.checked)} />
                                 <span style={{ ...s.toggleTrack, background: printFlag ? '#1976d2' : '#ccc' }}>
                                   <span style={{ ...s.toggleThumb, left: printFlag ? '20px' : '2px' }} />
@@ -253,8 +265,8 @@ export default function AssignReports() {
                               </label>
                             </td>
                             <td style={{ ...s.td, textAlign:'center' }}>
-                              <label style={s.toggleWrap}>
-                                <input type="checkbox" style={{ display:'none' }} checked={generateFlag}
+                              <label style={{ ...s.toggleWrap, opacity: enabled ? 1 : 0.5, cursor: enabled ? 'pointer' : 'not-allowed' }}>
+                                <input type="checkbox" style={{ display:'none' }} checked={generateFlag} disabled={!enabled}
                                   onChange={e => toggleFlag(r, 'GENERATE', e.target.checked)} />
                                 <span style={{ ...s.toggleTrack, background: generateFlag ? '#1976d2' : '#ccc' }}>
                                   <span style={{ ...s.toggleThumb, left: generateFlag ? '20px' : '2px' }} />

@@ -128,12 +128,13 @@ async function resolveOraclePath(bip, basePath) {
 
 exports.getProfile = async (req, res) => {
   const result = await db.execute(
-    `SELECT USER_ID, NAME, EMAIL, ROLE, CREATED_AT FROM USERS WHERE USER_ID = :id`,
+    `SELECT USER_ID, NAME, EMAIL, ROLE, CREATED_AT, REPORT_LANGUAGE FROM USERS WHERE USER_ID = :id`,
     { id: req.user.userId }
   );
   if (!result.rows.length)
     return res.status(404).json({ success: false, message: 'User not found' });
-  res.json({ success: true, data: result.rows[0] });
+  const row = result.rows[0];
+  res.json({ success: true, data: { ...row, language: (row.REPORT_LANGUAGE || 'EN').toLowerCase() } });
 };
 
 exports.getModules = async (req, res) => {
@@ -230,7 +231,7 @@ exports.refreshParameters = async (req, res) => {
 };
 
 exports.runReport = async (req, res) => {
-  const { reportPath, format, params, templateId, locale, timezone, action, clientIp } = req.body;
+  const { reportPath, format, params, templateId, timezone, action, clientIp } = req.body;
   const userId = req.user.userId;
 
   if (!reportPath || !format)
@@ -257,10 +258,12 @@ exports.runReport = async (req, res) => {
     // 2. Resolve the actual .xdo report object for the Oracle SOAP Service
     const oraclePath = await resolveOraclePath(bip, reportPath);
 
-    const userResult = await db.execute(`SELECT USER_NAME FROM USERS WHERE USER_ID = :userId`, { userId });
+    const userResult = await db.execute(`SELECT USER_NAME, REPORT_LANGUAGE FROM USERS WHERE USER_ID = :userId`, { userId });
     const userName = userResult.rows[0]?.USER_NAME;
-    // `locale` is the short code sent from the Report Language dropdown in Output Options.
-    const bipLocale = resolveBipLocale(locale);
+    // Reports always render in the language assigned to the user (USERS.REPORT_LANGUAGE) —
+    // resolved server-side rather than trusting the `locale` the client sent, so a
+    // tampered request can't generate a report in a language the user isn't assigned.
+    const bipLocale = resolveBipLocale(userResult.rows[0]?.REPORT_LANGUAGE);
 
     let finalParams = params || [];
     if (userName) {
