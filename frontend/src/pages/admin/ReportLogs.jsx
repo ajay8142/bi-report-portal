@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useReportEngine } from '../../context/ReportEngineContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 function formatDateTime(raw) {
   if (!raw) return '—';
@@ -15,6 +16,7 @@ function formatDateTime(raw) {
 
 export default function ReportLogs() {
   const { engine } = useReportEngine();
+  const { t } = useLanguage();
   const [clients,        setClients]        = useState([]);
   const [selectedClient, setSelectedClient]  = useState(null);
   const [rows,           setRows]            = useState([]);
@@ -30,8 +32,9 @@ export default function ReportLogs() {
       .then(() => { setSelectedClient(null); setRows([]); setLoadingClients(true); })
       .then(() => api.get('/admin/clients'))
       .then(r => setClients(r.data.data))
-      .catch(() => toast.error('Failed to load users'))
+      .catch(() => toast.error(t('toast_load_users_failed')))
       .finally(() => setLoadingClients(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on edition switch
   }, [engine]);
 
   const selectClient = async (client) => {
@@ -41,7 +44,7 @@ export default function ReportLogs() {
     try {
       const res = await api.get(`/admin/history/${client.USER_ID}`);
       setRows(res.data.data || []);
-    } catch { toast.error('Failed to load report history'); }
+    } catch { toast.error(t('toast_load_report_history_failed')); }
     finally  { setLoadingHistory(false); }
   };
 
@@ -54,25 +57,25 @@ export default function ReportLogs() {
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>Report Logs</h2>
+      <h2 style={s.heading}>{t('heading_report_logs')}</h2>
 
       {!selectedClient ? (
         <>
-          <p style={s.sub}>Select a User to view their report history:</p>
+          <p style={s.sub}>{t('sub_select_user_history')}</p>
           <div style={s.tableWrap}>
             <table style={s.table}>
               <thead>
                 <tr>
-                  <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                  <th style={s.th}>User Name</th>
-                  <th style={s.th}>Email</th>
+                  <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                  <th style={s.th}>{t('col_user_name')}</th>
+                  <th style={s.th}>{t('col_email')}</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingClients ? (
-                  <tr><td colSpan={3} style={s.empty}>Loading…</td></tr>
+                  <tr><td colSpan={3} style={s.empty}>{t('loading')}</td></tr>
                 ) : clients.length === 0 ? (
-                  <tr><td colSpan={3} style={s.empty}>No Users found</td></tr>
+                  <tr><td colSpan={3} style={s.empty}>{t('empty_no_users')}</td></tr>
                 ) : clients.map((c, i) => (
                   <tr
                     key={c.USER_ID}
@@ -93,7 +96,7 @@ export default function ReportLogs() {
       ) : (
         <>
           <div style={s.clientHeader}>
-            <button style={s.backBtn} onClick={() => { setSelectedClient(null); setRows([]); }}>← Back</button>
+            <button style={s.backBtn} onClick={() => { setSelectedClient(null); setRows([]); }}>← {t('back')}</button>
             <div style={s.clientInfo}>
               <strong>{selectedClient.NAME}</strong> — {selectedClient.EMAIL}
             </div>
@@ -102,23 +105,23 @@ export default function ReportLogs() {
           <div style={s.toolbar}>
             <input
               style={s.search}
-              placeholder="Search by report name or format…"
+              placeholder={t('search_placeholder_report')}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            <span style={s.count}>{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
+            <span style={s.count}>{filtered.length} {filtered.length !== 1 ? t('record_plural') : t('record_singular')}</span>
           </div>
 
           {loadingHistory ? (
-            <p style={s.msg}>Loading…</p>
+            <p style={s.msg}>{t('loading')}</p>
           ) : filtered.length === 0 ? (
-            <p style={s.msg}>{search ? 'No matching records.' : 'No report history yet.'}</p>
+            <p style={s.msg}>{search ? t('msg_no_matching_records') : t('msg_no_report_history')}</p>
           ) : (
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>
                   <tr>
-                    {['S No.', 'Report Name', 'Format', 'Action', 'IP Address', 'Date & Time'].map(h => (
+                    {[t('col_sno'), t('col_report_name'), t('col_format'), t('col_action'), t('col_ip_address'), t('col_date_time')].map(h => (
                       <th key={h} style={s.th}>{h}</th>
                     ))}
                   </tr>
@@ -135,7 +138,7 @@ export default function ReportLogs() {
                       </td>
                       <td style={s.td}>
                         <span style={{ ...s.badge, ...(row.ACTION === 'GENERATE' ? s.generateBadge : s.printBadge) }}>
-                          {row.ACTION === 'GENERATE' ? '👁 Generate' : '🖨 Print'}
+                          {row.ACTION === 'GENERATE' ? `👁 ${t('word_generate')}` : `🖨 ${t('word_print')}`}
                         </span>
                       </td>
                       <td style={{ ...s.td, ...s.tdIp }}>{row.IP_ADDRESS || '—'}</td>

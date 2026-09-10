@@ -362,3 +362,16 @@
     order: 3;
   }
 }
+
+[dir="rtl"] .rf-app {
+  text-align: right;
+}
+
+[dir="rtl"] .rf-search-bar {
+  padding: 6px 16px 6px 8px;
+}
+
+[dir="rtl"] .rf-close-btn {
+  right: auto;
+  left: 16px;
+}

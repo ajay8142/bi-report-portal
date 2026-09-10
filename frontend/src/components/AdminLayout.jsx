@@ -1,24 +1,25 @@
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { ReportEngineProvider, useReportEngine } from '../context/ReportEngineContext';
 import { Outlet, NavLink } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import profinchLogo from '../assets/profinchlogo.png';
 
 const navItems = [
-  { to: '/admin/dashboard',    icon: '📊', label: 'Dashboard'      },
-  { to: '/admin/view-reports', icon: '📁', label: 'View Reports'   },
-  { to: '/admin/search-reports', icon: '🔍', label: 'Search Reports' },
-  { to: '/admin/clients',      icon: '👥', label: 'Users'          },
-  { to: '/admin/assign',       icon: '🔗', label: 'Assign Reports' },
-  { to: '/admin/logs',         icon: '🕒', label: 'Report Logs'    },
+  { to: '/admin/dashboard',    icon: '📊', key: 'nav_dashboard'      },
+  { to: '/admin/view-reports', icon: '📁', key: 'nav_view_reports'   },
+  { to: '/admin/search-reports', icon: '🔍', key: 'nav_search_reports' },
+  { to: '/admin/clients',      icon: '👥', key: 'nav_users'          },
+  { to: '/admin/assign',       icon: '🔗', key: 'nav_assign_reports' },
+  { to: '/admin/logs',         icon: '🕒', key: 'nav_report_logs'    },
 ];
 
 // value = the REPORT_ENGINE this app's backend understands (see
 // backend/config/reportEngine.js) — "bip" runs everything off real BI
 // Publisher, "reportingtool" runs off the customized files under CHANGED FILES.
 const EDITIONS = [
-  { value: 'bip',           label: 'BIP Enterprise' },
-  { value: 'reportingtool', label: 'BIP Free'        },
+  { value: 'bip',           key: 'edition_bip_enterprise' },
+  { value: 'reportingtool', key: 'edition_bip_free'        },
 ];
 
 // ─── Admin Layout ─────────────────────────────────────────────────────────────
@@ -32,13 +33,14 @@ export default function AdminLayout() {
 
 function AdminLayoutContent() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const { engine, setEngine } = useReportEngine();
 
   const handleEditionChange = async (e) => {
     try {
       await setEngine(e.target.value);
     } catch {
-      toast.error('Failed to switch edition');
+      toast.error(t('toast_switch_edition_failed'));
     }
   };
 
@@ -54,7 +56,7 @@ function AdminLayoutContent() {
               to={n.to}
               style={({ isActive }) => ({ ...s.link, ...(isActive ? s.linkActive : {}) })}
             >
-              <span>{n.icon}</span> {n.label}
+              <span>{n.icon}</span> {t(n.key)}
             </NavLink>
           ))}
         </nav>
@@ -67,11 +69,11 @@ function AdminLayoutContent() {
             title="BIP Edition"
           >
             {EDITIONS.map(ed => (
-              <option key={ed.value} value={ed.value}>{ed.label}</option>
+              <option key={ed.value} value={ed.value}>{t(ed.key)}</option>
             ))}
           </select>
           <span style={s.userName}>{user?.name}</span>
-          <button style={s.logoutBtn} onClick={logout}>Logout</button>
+          <button style={s.logoutBtn} onClick={logout}>{t('logout')}</button>
         </div>
       </header>
 

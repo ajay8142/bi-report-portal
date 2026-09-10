@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api from '../../api/axiosInstance';
+import { useLanguage } from '../../context/LanguageContext';
 import './SearchReports.css';
 
 const splitItems = (value) =>
@@ -51,6 +52,7 @@ function ResultSkeleton() {
 }
 
 export default function SearchReports() {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -73,7 +75,7 @@ export default function SearchReports() {
       const res = await api.get('/admin/report-search', { params: { q: query, top_k: 5 } });
       setResults(res.data.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Search failed');
+      setError(err.response?.data?.message || t('toast_search_failed'));
       setResults([]);
     } finally {
       setLoading(false);
@@ -87,7 +89,7 @@ export default function SearchReports() {
       const res = await api.get(`/admin/report-search/${encodeURIComponent(id)}`);
       setMetadata(res.data.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load report');
+      setError(err.response?.data?.message || t('toast_load_report_detail_failed'));
     }
   };
 
@@ -95,8 +97,8 @@ export default function SearchReports() {
     <div className="rf-page">
       <div className="rf-app">
       <header className="rf-hero">
-        <h1>Report Finder</h1>
-        <p className="rf-tagline">Semantic search across your report catalog</p>
+        <h1>{t('report_finder')}</h1>
+        <p className="rf-tagline">{t('report_finder_tagline')}</p>
       </header>
 
       <form className="rf-search-bar" onSubmit={runSearch}>
@@ -105,7 +107,7 @@ export default function SearchReports() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search reports, e.g. customer account balance"
+          placeholder={t('rf_search_placeholder')}
           autoFocus
         />
         {query && (
@@ -113,20 +115,20 @@ export default function SearchReports() {
             type="button"
             className="rf-clear-btn"
             onClick={() => setQuery('')}
-            aria-label="Clear search"
+            aria-label={t('rf_clear_search_aria')}
           >
             <ClearIcon />
           </button>
         )}
         <button type="submit" className="rf-submit-btn" disabled={loading}>
-          {loading ? 'Searching...' : 'Search'}
+          {loading ? t('searching') : t('search')}
         </button>
       </form>
 
       {error && <p className="rf-error">{error}</p>}
 
       {!hasSearched && !error && (
-        <p className="rf-hint">Type a question or topic above and hit Search to find matching reports.</p>
+        <p className="rf-hint">{t('report_finder_hint')}</p>
       )}
 
       {loading && <ResultSkeleton />}
@@ -145,7 +147,7 @@ export default function SearchReports() {
               </li>
             ))}
             {results.length === 0 && !error && (
-              <li className="rf-result-card empty">No reports matched your search — try different terms.</li>
+              <li className="rf-result-card empty">{t('rf_no_match')}</li>
             )}
           </ul>
 
@@ -155,12 +157,12 @@ export default function SearchReports() {
                 type="button"
                 className="rf-close-btn"
                 onClick={() => setSelectedId(null)}
-                aria-label="Close details"
+                aria-label={t('rf_close_details_aria')}
               >
                 <ClearIcon />
               </button>
               {!metadata ? (
-                <p>Loading...</p>
+                <p>{t('loading')}</p>
               ) : (
                 <>
                   <h2>{metadata['Report Name']}</h2>
@@ -169,21 +171,21 @@ export default function SearchReports() {
                   <p className="rf-description">{metadata['Description']}</p>
 
                   <div className="rf-field">
-                    <div className="rf-field-label">Tables</div>
+                    <div className="rf-field-label">{t('field_tables')}</div>
                     <ChipList items={splitItems(metadata['Tables'])} />
                   </div>
                   <div className="rf-field">
-                    <div className="rf-field-label">Columns</div>
+                    <div className="rf-field-label">{t('field_columns')}</div>
                     <ChipList items={splitItems(metadata['Columns'])} />
                   </div>
                   <div className="rf-field">
-                    <div className="rf-field-label">Parameters</div>
+                    <div className="rf-field-label">{t('parameters')}</div>
                     <ChipList items={splitItems(metadata['Parameters'])} />
                   </div>
 
                   {metadata['Sql Queries'] && (
                     <details className="rf-sql-block">
-                      <summary>View SQL</summary>
+                      <summary>{t('view_sql')}</summary>
                       <pre><code>{metadata['Sql Queries']}</code></pre>
                     </details>
                   )}

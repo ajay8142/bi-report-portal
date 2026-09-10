@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useReportEngine } from '../../context/ReportEngineContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function ViewReports() {
   const { engine } = useReportEngine();
+  const { t } = useLanguage();
   const [modules,      setModules]      = useState([]);
   const [reports,      setReports]      = useState([]);
   const [activeModule, setActiveModule] = useState(null);
@@ -16,8 +18,9 @@ export default function ViewReports() {
       .then(() => { setActiveModule(null); setReports([]); setLoading(true); })
       .then(() => api.get('/admin/modules'))
       .then(res => setModules(res.data.data))
-      .catch(() => toast.error('Failed to load modules'))
+      .catch(() => toast.error(t('toast_load_modules_failed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on edition switch
   }, [engine]);
 
   const loadReports = async (mod) => {
@@ -26,28 +29,28 @@ export default function ViewReports() {
     try {
       const res = await api.get('/admin/modules/reports', { params: { path: mod.absolutePath } });
       setReports(res.data.data);
-    } catch { toast.error('Failed to load reports'); }
+    } catch { toast.error(t('toast_load_reports_failed')); }
     finally  { setLoading(false); }
   };
 
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h2 style={s.heading}>View Reports</h2>
+        <h2 style={s.heading}>{t('heading_view_reports')}</h2>
       </div>
 
       {/* Breadcrumb */}
       {activeModule && (
         <div style={s.breadcrumb}>
           <span style={s.crumbLink} onClick={() => { setActiveModule(null); setReports([]); }}>
-            📁 All Modules
+            📁 {t('all_modules')}
           </span>
           <span style={s.sep}> › </span>
           <span style={s.crumbCurrent}>📂 {activeModule.displayName}</span>
         </div>
       )}
 
-      {loading && <p style={s.loading}>Loading…</p>}
+      {loading && <p style={s.loading}>{t('loading')}</p>}
 
       {/* Modules list */}
       {!activeModule && !loading && modules.length > 0 && (
@@ -55,8 +58,8 @@ export default function ViewReports() {
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                <th style={s.th}>Module Name</th>
+                <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                <th style={s.th}>{t('col_module_name')}</th>
               </tr>
             </thead>
             <tbody>
@@ -83,13 +86,13 @@ export default function ViewReports() {
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                <th style={s.th}>Report Name</th>
+                <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                <th style={s.th}>{t('col_report_name')}</th>
               </tr>
             </thead>
             <tbody>
               {reports.length === 0 ? (
-                <tr><td colSpan={2} style={s.empty}>No reports found in this module</td></tr>
+                <tr><td colSpan={2} style={s.empty}>{t('empty_no_reports_found_in_module')}</td></tr>
               ) : reports.map((r, i) => (
                 <tr key={r.absolutePath} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                   <td style={{ ...s.td, ...s.tdNum }}>{i + 1}</td>
@@ -105,7 +108,7 @@ export default function ViewReports() {
       {!loading && modules.length === 0 && (
         <div style={s.emptyState}>
           <div style={{ fontSize:'48px' }}>📊</div>
-          <p>No modules found.</p>
+          <p>{t('no_modules_found_period')}</p>
         </div>
       )}
     </div>

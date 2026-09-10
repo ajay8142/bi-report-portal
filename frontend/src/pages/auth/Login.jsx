@@ -4,10 +4,13 @@ import * as yup from 'yup';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import profinchLogo from '../../assets/profinchlogo.png';
 
+// No user is logged in yet on this screen, so there's no assigned language to
+// read — it always renders in the LanguageProvider's default (English).
 const schema = yup.object({
   user_name: yup.string().trim().required('Username is required'),
   password:  yup.string().min(6, 'Min 6 characters').required('Password is required'),
@@ -15,6 +18,7 @@ const schema = yup.object({
 
 export default function Login() {
   const { login } = useAuth();
+  const { t } = useLanguage();
   const navigate  = useNavigate();
   const [loading, setLoading] = useState(false);
   const { register, handleSubmit, formState: { errors } } = useForm({ resolver: yupResolver(schema) });
@@ -24,10 +28,10 @@ export default function Login() {
     try {
       const res = await api.post('/auth/login', data);
       login(res.data.token, res.data.user);
-      toast.success('Welcome back!');
+      toast.success(t('toast_welcome_back'));
       navigate(res.data.user.role === 'ADMIN' ? '/admin/dashboard' : '/client/generate');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      toast.error(err.response?.data?.message || t('toast_login_failed'));
     } finally {
       setLoading(false);
     }
@@ -38,22 +42,22 @@ export default function Login() {
       <div style={s.card}>
         <div style={s.logoWrap}>
           <img src={profinchLogo} alt="Profinch" style={s.logo} />
-          <h2 style={s.title}>Profinch ReportX</h2>
+          <h2 style={s.title}>{t('app_name')}</h2>
         </div>
-  
+
         <form onSubmit={handleSubmit(onSubmit)}>
           <div style={s.field}>
-            <label style={s.label}>Username</label>
-            <input style={s.input} type="text" placeholder="username" {...register('user_name')} />
+            <label style={s.label}>{t('field_username')}</label>
+            <input style={s.input} type="text" placeholder={t('placeholder_username')} {...register('user_name')} />
             {errors.user_name && <span style={s.err}>{errors.user_name.message}</span>}
           </div>
           <div style={s.field}>
-            <label style={s.label}>Password</label>
+            <label style={s.label}>{t('field_password')}</label>
             <input style={s.input} type="password" placeholder="••••••••" {...register('password')} />
             {errors.password && <span style={s.err}>{errors.password.message}</span>}
           </div>
           <button style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? t('signing_in') : t('sign_in')}
           </button>
         </form>
       </div>

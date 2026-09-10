@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useReportEngine } from '../../context/ReportEngineContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function Dashboard() {
   const { engine } = useReportEngine();
+  const { t } = useLanguage();
   const [data, setData]     = useState({ totalClients:0, totalModules:0, totalReports:0 });
   const [loading, setLoading] = useState(true);
 
@@ -14,31 +16,29 @@ export default function Dashboard() {
       .then(() => setLoading(true))
       .then(() => api.get('/admin/dashboard'))
       .then(r => setData(r.data.data))
-      .catch(() => toast.error('Failed to load dashboard'))
+      .catch(() => toast.error(t('toast_dashboard_failed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on edition switch
   }, [engine]);
 
   const cards = [
-    { label:'Total Modules',  value: data.totalModules,  color:'#1976d2', icon:'📁' },
-    { label:'Total Reports',  value: data.totalReports,  color:'#388e3c', icon:'📄' },
-    { label:'Total Clients',  value: data.totalClients,  color:'#f57c00', icon:'👥' },
+    { label: t('card_total_modules'), value: data.totalModules,  color:'#1976d2', icon:'📁' },
+    { label: t('card_total_reports'), value: data.totalReports,  color:'#388e3c', icon:'📄' },
+    { label: t('card_total_clients'), value: data.totalClients,  color:'#f57c00', icon:'👥' },
   ];
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>Dashboard</h2>
+      <h2 style={s.heading}>{t('dashboard_heading')}</h2>
 
       <div style={s.hero}>
         <div style={s.heroText}>
-          <h1 style={s.heroTitle}>Welcome to Profinch ReportX</h1>
-          <p style={s.heroSubtitle}>
-            Profinch ReportX is your centralized platform for business intelligence reporting.
-            Generate on-demand reports, track report history, and manage client access — all from one place.
-          </p>
+          <h1 style={s.heroTitle}>{t('dashboard_hero_title')}</h1>
+          <p style={s.heroSubtitle}>{t('dashboard_hero_subtitle')}</p>
         </div>
       </div>
 
-      {loading ? <p>Loading…</p> : (
+      {loading ? <p>{t('loading')}</p> : (
         <div style={s.grid}>
           {cards.map(c => (
             <div key={c.label} style={{ ...s.card, borderTop:`4px solid ${c.color}` }}>

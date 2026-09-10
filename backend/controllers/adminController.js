@@ -117,7 +117,7 @@ exports.getReports = async (req, res) => {
 // one endpoint, so filtering here is enough to scope all three.
 exports.getClients = async (req, res) => {
   const result = await db.execute(
-    `SELECT USER_ID, NAME, USER_NAME, EMAIL, IS_ACTIVE, CREATED_AT, REPORT_SERVER
+    `SELECT USER_ID, NAME, USER_NAME, EMAIL, IS_ACTIVE, CREATED_AT, REPORT_SERVER, REPORT_LANGUAGE
      FROM USERS WHERE ROLE='CLIENT' AND REPORT_SERVER=:reportServer ORDER BY CREATED_AT DESC`,
     { reportServer: reportEngine.getServerForEngine() }
   );
@@ -125,7 +125,7 @@ exports.getClients = async (req, res) => {
 };
 
 exports.createClient = async (req, res) => {
-  const { name, user_name, email, password } = req.body;
+  const { name, user_name, email, password, report_language } = req.body;
   if (!name || !user_name || !email || !password)
     return res.status(400).json({ success: false, message: 'name, user_name, email and password are required' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -134,6 +134,7 @@ exports.createClient = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Password: min 8 chars, 1 uppercase, 1 number, 1 special char' });
 
   const userName = user_name.trim().toUpperCase();
+  const reportLanguage = (report_language || 'EN').toUpperCase();
 
   // The username must be a real core-banking (FCUBS) user — everything this app
   // does for a client (branch/product access, report restriction filters) is
@@ -150,9 +151,9 @@ exports.createClient = async (req, res) => {
 
   const hash   = await bcrypt.hash(password, 12);
   const result = await db.execute(
-    `INSERT INTO USERS (NAME,USER_NAME,EMAIL,PASSWORD_HASH,ROLE,REPORT_SERVER)
-     VALUES (:name,:userName,:email,:hash,'CLIENT',:reportServer) RETURNING USER_ID INTO :userId`,
-    { name: name.trim(), userName, email: email.toLowerCase().trim(), hash,
+    `INSERT INTO USERS (NAME,USER_NAME,EMAIL,PASSWORD_HASH,ROLE,REPORT_SERVER,REPORT_LANGUAGE)
+     VALUES (:name,:userName,:email,:hash,'CLIENT',:reportServer,:reportLanguage) RETURNING USER_ID INTO :userId`,
+    { name: name.trim(), userName, email: email.toLowerCase().trim(), hash, reportLanguage,
       reportServer: reportEngine.getServerForEngine(), userId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } }
   );
   res.status(201).json({ success: true, message: 'Client created', data: { userId: result.outBinds.userId[0] } });
@@ -160,8 +161,9 @@ exports.createClient = async (req, res) => {
 
 exports.updateClient = async (req, res) => {
   const { id } = req.params;
-  const { name, user_name, is_active } = req.body;
+  const { name, user_name, is_active, report_language } = req.body;
   const userName = user_name ? user_name.trim().toUpperCase() : null;
+  const reportLanguage = report_language ? report_language.trim().toUpperCase() : null;
 
   if (userName) {
     const dupUserName = await db.execute(
@@ -173,9 +175,10 @@ exports.updateClient = async (req, res) => {
   }
 
   await db.execute(
-    `UPDATE USERS SET NAME=NVL(:name,NAME), USER_NAME=NVL(:userName,USER_NAME), IS_ACTIVE=NVL(:isActive,IS_ACTIVE), UPDATED_AT=SYSTIMESTAMP
+    `UPDATE USERS SET NAME=NVL(:name,NAME), USER_NAME=NVL(:userName,USER_NAME), IS_ACTIVE=NVL(:isActive,IS_ACTIVE),
+            REPORT_LANGUAGE=NVL(:reportLanguage,REPORT_LANGUAGE), UPDATED_AT=SYSTIMESTAMP
      WHERE USER_ID=:id AND ROLE='CLIENT'`,
-    { name: name || null, userName, isActive: is_active ?? null, id: Number(id) }
+    { name: name || null, userName, isActive: is_active ?? null, reportLanguage, id: Number(id) }
   );
   res.json({ success: true, message: 'Client updated' });
 };

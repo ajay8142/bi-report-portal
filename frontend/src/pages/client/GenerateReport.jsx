@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
-import { LANGUAGES } from '../../constants/languages';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   TextField,
   MenuItem,
@@ -46,6 +46,7 @@ function toHTMLDateValue(value) {
 }
 
 function ParamField({ param, value, onChange }) {
+  const { t } = useLanguage();
   const { name, label, dataType, UIType, multiValuesAllowed, lovLabels, values: lovValues, defaultValue, mandatory, useNullForAll } = param;
 
   const isLov = (UIType === 'menu' || UIType === 'check' || UIType === 'radio') && lovLabels?.length > 0;
@@ -56,7 +57,7 @@ function ParamField({ param, value, onChange }) {
   if (mandatory) {
     indicator = ' *';
   } else if (useNullForAll && multiValuesAllowed) {
-    indicator = ' (ALL)';
+    indicator = t('indicator_all_suffix');
   }
   const displayLabel = `${label}${indicator}`;
 
@@ -83,7 +84,7 @@ function ParamField({ param, value, onChange }) {
           </li>
         )}
         renderInput={(params) => (
-          <TextField {...params} label={displayLabel} InputLabelProps={{ shrink: true }} placeholder="Search GL code..." />
+          <TextField {...params} label={displayLabel} InputLabelProps={{ shrink: true }} placeholder={t('search_gl_code_placeholder')} />
         )}
       />
     );
@@ -98,7 +99,7 @@ function ParamField({ param, value, onChange }) {
         value={value || null}
         onChange={(e, newValue) => onChange(name, newValue || '')}
         renderInput={(params) => (
-          <TextField {...params} label={displayLabel} InputLabelProps={{ shrink: true }} placeholder="Search GL code..." />
+          <TextField {...params} label={displayLabel} InputLabelProps={{ shrink: true }} placeholder={t('search_gl_code_placeholder')} />
         )}
       />
     );
@@ -131,7 +132,7 @@ function ParamField({ param, value, onChange }) {
           input={<OutlinedInput label={displayLabel} notched />}
           renderValue={(selected) => {
             if (selected.includes('*')) {
-              return <span>All</span>;
+              return <span>{t('all')}</span>;
             }
  
             return selected
@@ -168,7 +169,7 @@ function ParamField({ param, value, onChange }) {
         InputLabelProps={{ shrink: true }}
         onChange={(e) => onChange(name, e.target.value)}
       >
-        <MenuItem value=""><em>-- Select --</em></MenuItem>
+        <MenuItem value=""><em>{t('select_dash')}</em></MenuItem>
         {lovLabels.map((lbl, i) => (
           <MenuItem key={i} value={lovValues[i] || lbl}>{lbl}</MenuItem>
         ))}
@@ -218,6 +219,7 @@ const FORMATS = ['pdf', 'xlsx', 'html', 'csv', 'rtf', 'xml'];
 const HIDDEN_PARAMS = ['PM_USER_ID', 'PM_ROLE_ID', 'PM_MODULE'];
 
 export default function GenerateReport() {
+  const { t, language } = useLanguage();
   const [modules,      setModules]      = useState([]);
   const [activeModule, setActiveModule] = useState(null);
   const [reports,      setReports]      = useState([]);
@@ -225,7 +227,6 @@ export default function GenerateReport() {
   const [params,       setParams]       = useState([]);
   const [paramValues,  setParamValues]  = useState({});
   const [format,       setFormat]       = useState('pdf');
-  const [language,     setLanguage]     = useState('en');
   const [action,       setAction]       = useState('');
   const [loading,      setLoading]      = useState(true);
   const [running,      setRunning]      = useState(false);
@@ -233,9 +234,9 @@ export default function GenerateReport() {
   useEffect(() => {
     api.get('/client/modules')
       .then(r => setModules(r.data.data))
-      .catch(() => toast.error('Failed to load modules'))
+      .catch(() => toast.error(t('toast_load_modules_failed')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const loadReports = async (mod) => {
     setActiveModule(mod);
@@ -246,7 +247,7 @@ export default function GenerateReport() {
     try {
       const res = await api.get('/client/modules/reports', { params: { path: mod.absolutePath } });
       setReports(res.data.data);
-    } catch { toast.error('Failed to load reports'); }
+    } catch { toast.error(t('toast_load_reports_failed')); }
     finally  { setLoading(false); }
   };
 
@@ -276,7 +277,7 @@ export default function GenerateReport() {
         }
       });
       setParamValues(defaults);
-    } catch { toast.error('Failed to load parameters'); }
+    } catch { toast.error(t('toast_load_parameters_failed')); }
     finally  { setLoading(false); }
   };
 
@@ -329,14 +330,14 @@ export default function GenerateReport() {
         a.click();
         URL.revokeObjectURL(url);
       }
-      toast.success(`Report ${action === 'preview' ? 'opened' : 'downloaded'} successfully`);
-    } catch { toast.error('Failed to run report. Check parameters and try again.'); }
+      toast.success(action === 'preview' ? t('toast_report_opened_success') : t('toast_report_downloaded_success'));
+    } catch { toast.error(t('toast_run_report_failed')); }
     finally  { setRunning(false); }
   };
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>Generate Report</h2>
+      <h2 style={s.heading}>{t('heading_generate_report')}</h2>
 
       {/* Breadcrumb */}
       <div style={s.breadcrumb}>
@@ -344,7 +345,7 @@ export default function GenerateReport() {
           style={activeModule ? s.crumbLink : s.crumbCurrent}
           onClick={() => { setActiveModule(null); setActiveReport(null); setReports([]); setParams([]); }}
         >
-          📁 Modules
+          📁 {t('modules')}
         </span>
         {activeModule && (
           <>
@@ -365,7 +366,7 @@ export default function GenerateReport() {
         )}
       </div>
 
-      {loading && <p style={s.loading}>Loading…</p>}
+      {loading && <p style={s.loading}>{t('loading')}</p>}
 
       {/* Modules Table */}
       {!activeModule && !loading && (
@@ -373,13 +374,13 @@ export default function GenerateReport() {
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                <th style={s.th}>Module Name</th>
+                <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                <th style={s.th}>{t('col_module_name')}</th>
               </tr>
             </thead>
             <tbody>
               {modules.length === 0 ? (
-                <tr><td colSpan={2} style={s.empty}>No modules assigned to you.</td></tr>
+                <tr><td colSpan={2} style={s.empty}>{t('empty_no_modules_assigned')}</td></tr>
               ) : modules.map((mod, i) => (
                 <tr
                   key={mod.absolutePath}
@@ -403,13 +404,13 @@ export default function GenerateReport() {
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={{ ...s.th, ...s.thNum }}>S No.</th>
-                <th style={s.th}>Report Name</th>
+                <th style={{ ...s.th, ...s.thNum }}>{t('col_sno')}</th>
+                <th style={s.th}>{t('col_report_name')}</th>
               </tr>
             </thead>
             <tbody>
               {reports.length === 0 ? (
-                <tr><td colSpan={2} style={s.empty}>No reports assigned in this module.</td></tr>
+                <tr><td colSpan={2} style={s.empty}>{t('empty_no_reports_assigned')}</td></tr>
               ) : reports.map((r, i) => (
                 <tr
                   key={r.absolutePath}
@@ -432,11 +433,11 @@ export default function GenerateReport() {
         <>
           {/* Parameters Panel */}
           <div style={s.panel}>
-            <h3 style={s.panelTitle}>Parameters</h3>
+            <h3 style={s.panelTitle}>{t('parameters')}</h3>
             {(() => {
               const visibleParams = params.filter(p => !HIDDEN_PARAMS.includes((p.name || '').toUpperCase()));
               return visibleParams.length === 0 ? (
-                <p style={s.empty}>This report has no parameters.</p>
+                <p style={s.empty}>{t('msg_no_parameters')}</p>
               ) : (
                 <div style={s.paramGrid}>
                   {visibleParams.map(p => (
@@ -451,10 +452,10 @@ export default function GenerateReport() {
 
           {/* Output Options Panel */}
           <div style={{ ...s.panel, background: '#f9fafb', marginTop: '16px' }}>
-            <h3 style={s.panelTitle}>Output Options</h3>
+            <h3 style={s.panelTitle}>{t('output_options')}</h3>
             <div style={s.outputRow}>
               <div style={s.outputField}>
-                <label style={s.label}>Output Format</label>
+                <label style={s.label}>{t('output_format')}</label>
                 <select
                   value={format}
                   onChange={e => setFormat(e.target.value)}
@@ -466,27 +467,21 @@ export default function GenerateReport() {
                 </select>
               </div>
               <div style={s.outputField}>
-                <label style={s.label}>Report Language</label>
-                <select
-                  value={language}
-                  onChange={e => setLanguage(e.target.value)}
-                  style={s.select}
-                >
-                  {LANGUAGES.map(l => (
-                    <option key={l.code} value={l.code}>{l.label}</option>
-                  ))}
-                </select>
+                <label style={s.label}>{t('report_language')}</label>
+                {/* Locked to the language assigned to this user (USERS.REPORT_LANGUAGE) —
+                    reports always generate in that language; see clientController.runReport. */}
+                <div style={s.staticValue}>{t(`lang_name_${language}`)}</div>
               </div>
               {(activeReport.printFlag || activeReport.generateFlag) && (
                 <div style={s.outputField}>
-                  <label style={s.label}>Action</label>
+                  <label style={s.label}>{t('action_label')}</label>
                   <select
                     value={action}
                     onChange={e => setAction(e.target.value)}
                     style={s.select}
                   >
-                    {activeReport.printFlag && <option value="download">🖨 Print</option>}
-                    {activeReport.generateFlag && <option value="preview">👁 Generate</option>}
+                    {activeReport.printFlag && <option value="download">🖨 {t('word_print')}</option>}
+                    {activeReport.generateFlag && <option value="preview">👁 {t('word_generate')}</option>}
                   </select>
                 </div>
               )}
@@ -498,10 +493,10 @@ export default function GenerateReport() {
                   onClick={() => runReport(action)}
                   disabled={running}
                 >
-                  {running ? 'Running…' : action === 'download' ? '🖨 Print' : '👁 Generate'}
+                  {running ? t('running') : action === 'download' ? `🖨 ${t('word_print')}` : `👁 ${t('word_generate')}`}
                 </button>
               ) : (
-                <p style={s.empty}>No actions available for this report. Contact your administrator.</p>
+                <p style={s.empty}>{t('msg_no_actions_available')}</p>
               )}
             </div>
           </div>
@@ -536,6 +531,7 @@ const s = {
   outputField:{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' },
   label:      { fontSize: '13px', fontWeight: 600, color: '#555' },
   select:     { padding: '10px 14px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', color: '#333', background: '#fff', cursor: 'pointer' },
+  staticValue:{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #eee', fontSize: '14px', color: '#333', background: '#f0f2f5' },
   runWrap:    { display: 'flex', justifyContent: 'center' },
   runBtn:     { padding: '12px 36px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 700, cursor: 'pointer' },
 };
