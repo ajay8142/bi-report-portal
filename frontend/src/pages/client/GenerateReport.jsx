@@ -216,7 +216,7 @@ const FORMATS = ['pdf', 'xlsx', 'html', 'csv', 'rtf', 'xml'];
 
 // Internal/system parameters that should never be shown as input fields —
 // they're still submitted with their default/current value when the report runs.
-const HIDDEN_PARAMS = ['PM_USER_ID', 'PM_ROLE_ID', 'PM_MODULE'];
+const HIDDEN_PARAMS = ['PM_USER_ID', 'PM_ROLE_ID', 'PM_MODULE', 'REPORT_LANGUAGE'];
 
 export default function GenerateReport() {
   const { t, language } = useLanguage();
@@ -309,7 +309,6 @@ export default function GenerateReport() {
       const res = await api.post('/client/reports/run', {
         reportPath: activeReport.absolutePath,
         format,
-        locale: language,
         params: paramPayload,
         action,
         clientIp,
