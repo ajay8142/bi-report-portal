@@ -1,13 +1,6 @@
 const db          = require('../config/db');
 const reportEngine = require('../config/reportEngine');
 
-// Short codes the "Report Language" dropdown in Output Options sends —
-// mapped to the full BIP locale identifier runReport expects.
-const LOCALE_MAP = { en: 'en-US', fr: 'fr-FR', ar: 'ar-SA', ru: 'ru-RU', vi: 'vi-VN' };
-function resolveBipLocale(code) {
-  return LOCALE_MAP[(code || '').toLowerCase()] || LOCALE_MAP.en;
-}
-
 // Client requests must run against the engine tied to *that user's*
 // REPORT_SERVER (BIP Server / Profinch Report Server), not whichever
 // edition the admin currently has the top-bar dropdown set to — that
@@ -260,12 +253,20 @@ exports.runReport = async (req, res) => {
 
     const userResult = await db.execute(`SELECT USER_NAME, REPORT_LANGUAGE FROM USERS WHERE USER_ID = :userId`, { userId });
     const userName = userResult.rows[0]?.USER_NAME;
-    // Reports always render in the language assigned to the user (USERS.REPORT_LANGUAGE) —
-    // resolved server-side rather than trusting the `locale` the client sent, so a
-    // tampered request can't generate a report in a language the user isn't assigned.
-    const bipLocale = resolveBipLocale(userResult.rows[0]?.REPORT_LANGUAGE);
+    // Reports render in the language assigned to the user (USERS.REPORT_LANGUAGE), passed
+    // in as a report parameter rather than an engine-level locale setting — resolved
+    // server-side rather than trusting anything the client sent, so a tampered request
+    // can't generate a report in a language the user isn't assigned.
+    const reportLanguage = (userResult.rows[0]?.REPORT_LANGUAGE || 'EN').toUpperCase();
 
     let finalParams = params || [];
+    {
+      const langIdx = finalParams.findIndex(p => (p.name || '').toUpperCase() === 'REPORT_LANGUAGE');
+      const languageParam = { name: 'REPORT_LANGUAGE', dataType: 'string', values: [reportLanguage] };
+      finalParams = langIdx >= 0
+        ? finalParams.map((p, i) => i === langIdx ? { ...p, values: [reportLanguage] } : p)
+        : [...finalParams, languageParam];
+    }
     if (userName) {
       const idx = finalParams.findIndex(p => (p.name || '').toUpperCase() === 'PM_USER_ID');
       const pmUserIdParam = { name: 'PM_USER_ID', dataType: 'string', values: [userName] };
@@ -281,11 +282,25 @@ exports.runReport = async (req, res) => {
         : [...finalParams, pmRoleIdParam];
     }
 
+    // Arabic reports don't use the report's default template directly — BIP holds a
+    // separate "<defaultTemplateId>_AR" template for them, so look up the default
+    // template name and switch to its Arabic counterpart before running the report.
+    let finalTemplateId = templateId || '';
+    if (reportLanguage === 'AR') {
+      try {
+        const def = await bip.getReportDefinition(oraclePath);
+        if (def?.defaultTemplateId) {
+          finalTemplateId = `${def.defaultTemplateId}_AR`;
+        }
+      } catch (err) {
+        console.error('🚨 Arabic Template Resolve Error:', err.message);
+      }
+    }
+
     const result = await bip.runReport({
       reportAbsolutePath: oraclePath,
       format, params: finalParams,
-      templateId: templateId || '',
-      locale: bipLocale,
+      templateId: finalTemplateId,
       timezone: timezone || 'Asia/Calcutta',
       action,
     });
