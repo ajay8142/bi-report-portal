@@ -1,0 +1,43 @@
+stages:
+  - deploy
+
+deploy_production:
+  stage: deploy
+  tags:
+    - 10-20-5-18
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  script:
+    - echo "Syncing latest code to /u01/profinch-report-portal-main"
+    - rsync -a --delete
+        --exclude='.git'
+        --exclude='backend/.env'
+        --exclude='nginx/ssl'
+        "$CI_PROJECT_DIR"/ /u01/profinch-report-portal-main/
+    - cd /u01/profinch-report-portal-main
+    - |
+      cat > backend/.env <<EOF
+      PORT=5000
+      NODE_ENV=production
+      #JWT_SECRET=profinchsolutionspvtltdbireportportal
+      JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      DB_USER=${DB_USER}
+      DB_PASSWORD=${DB_PASSWORD}
+      DB_CONNECT_STRING=${DB_CONNECT_STRING}
+      BIP_BASE_URL=${BIP_BASE_URL}
+      BIP_USERNAME=${BIP_USERNAME}
+      BIP_PASSWORD=${BIP_PASSWORD}
+      REPORT_ENGINE=${REPORT_ENGINE}
+      REPORTING_TOOL_BASE_URL=${REPORTING_TOOL_BASE_URL}
+      REPORTING_TOOL_USERNAME=${REPORTING_TOOL_USERNAME}
+      REPORTING_TOOL_PASSWORD=${REPORTING_TOOL_PASSWORD}
+      FRONTEND_URL=http://localhost:5173
+      EOF
+    - chmod 600 backend/.env
+    - |
+      if [ ! -f nginx/ssl/fullchain.pem ] || [ ! -f nginx/ssl/privkey.pem ]; then
+        ./nginx/ssl/generate-self-signed.sh localhost
+      fi
+    - docker compose up -d --build
+    - docker compose ps
