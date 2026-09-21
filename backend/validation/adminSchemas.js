@@ -5,9 +5,8 @@ const { idParam, email, passwordComplexity } = require('./common');
 // Must match the ENGINES keys in config/reportEngine.js.
 const ENGINE_NAMES = ['bip', 'reportingtool'];
 
-// Must match the codes in frontend/src/constants/languages.js and
-// clientController.js's LOCALE_MAP.
-const REPORT_LANGUAGES = ['EN', 'FR', 'AR', 'RU', 'VI'];
+// Must match the codes in frontend/src/constants/languages.js.
+const REPORT_LANGUAGES = ['EN', 'FR', 'AR', 'RU', 'VI', 'AM'];
 const reportLanguage = Joi.string().trim().uppercase().valid(...REPORT_LANGUAGES);
 
 const assignmentFields = {
